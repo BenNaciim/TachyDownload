@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:;">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tachy Download</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="side">
+      <div class="brand"><img src="logo.png" alt="" width="34" height="34"><span>Tachy Download</span></div>
+      <button id="btn-add" class="add"><svg class="i" data-i="plus"></svg>Ajouter</button>
+
+      <nav id="nav" aria-label="Filtres">
+        <button class="nav-item on" data-filter="all"><svg class="i" data-i="list"></svg><span>Tous</span><b id="c-all">0</b></button>
+        <button class="nav-item" data-filter="active"><svg class="i" data-i="play"></svg><span>En cours</span><b id="c-active">0</b></button>
+        <button class="nav-item" data-filter="waiting"><svg class="i" data-i="clock"></svg><span>En attente</span><b id="c-waiting">0</b></button>
+        <button class="nav-item" data-filter="scheduled"><svg class="i" data-i="calendar"></svg><span>Planifiés</span><b id="c-scheduled">0</b></button>
+        <button class="nav-item" data-filter="done"><svg class="i" data-i="check"></svg><span>Terminés</span><b id="c-done">0</b></button>
+      </nav>
+
+      <div class="side-foot">
+        <button id="btn-pause-all" class="ghost"><svg class="i" data-i="pause"></svg>Tout mettre en pause</button>
+        <button id="btn-resume-all" class="ghost"><svg class="i" data-i="play"></svg>Tout reprendre</button>
+        <button id="btn-settings" class="ghost"><svg class="i" data-i="sliders"></svg>Paramètres</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="hero" aria-label="Vitesse en direct">
+        <div class="hero-text">
+          <div class="hero-label">Vitesse totale</div>
+          <div class="hero-speed"><span id="hero-num">0</span><span id="hero-unit">Mo/s</span></div>
+          <div class="hero-chips">
+            <span id="chip-active">0 actif</span>
+            <span id="chip-waiting">0 en attente</span>
+            <span id="chip-limit">Sans limite</span>
+          </div>
+        </div>
+        <div class="hero-graph">
+          <svg viewBox="0 0 360 80" preserveAspectRatio="none" role="img" aria-label="Courbe de vitesse des 90 dernières secondes">
+            <polygon id="g-area" points=""/>
+            <polyline id="g-line" points=""/>
+          </svg>
+          <div class="hero-peak" id="hero-peak">90 dernières secondes</div>
+        </div>
+      </section>
+
+      <div class="list-head">
+        <h1 id="list-title">Tous les téléchargements</h1>
+        <label class="search"><svg class="i" data-i="search"></svg><input id="search" type="search" placeholder="Rechercher" aria-label="Rechercher un téléchargement"></label>
+      </div>
+
+      <div id="rows" class="rows" role="list"></div>
+
+      <div id="empty" class="empty" hidden>
+        <div class="empty-mark"><svg class="i" data-i="download"></svg></div>
+        <h2 id="empty-title">Aucun téléchargement</h2>
+        <p id="empty-text">Collez un lien avec « Ajouter », ou laissez l’extension du navigateur vous envoyer vos téléchargements.</p>
+        <button id="empty-add" class="add inline"><svg class="i" data-i="plus"></svg>Ajouter un lien</button>
+      </div>
+    </main>
+
+    <aside class="drawer" id="drawer" aria-label="Détails du téléchargement" hidden>
+      <button id="drawer-close" class="icon-btn close" aria-label="Fermer le panneau"><svg class="i" data-i="x"></svg></button>
+      <div class="d-head">
+        <div class="tile" id="d-tile"></div>
+        <div class="d-title">
+          <h2 id="d-name"></h2>
+          <span class="pill" id="d-status"></span>
+        </div>
+      </div>
+      <div class="d-pct"><span id="d-pct">0 %</span><span class="muted" id="d-sizes"></span></div>
+      <div class="bar big" id="d-bar"><i></i></div>
+      <div class="d-stats">
+        <div><span class="muted">Vitesse</span><b id="d-speed">–</b></div>
+        <div><span class="muted">Temps restant</span><b id="d-eta">–</b></div>
+      </div>
+      <h3>Découpage</h3>
+      <div class="segmap" id="d-map" aria-hidden="true"></div>
+      <h3>Connexions</h3>
+      <div id="d-lanes" class="lanes"></div>
+      <h3>Informations</h3>
+      <dl class="info" id="d-info"></dl>
+      <div class="d-actions" id="d-actions"></div>
+    </aside>
+  </div>
+
+  <dialog id="dlg-add">
+    <form method="dialog" id="form-add">
+      <h2>Ajouter des téléchargements</h2>
+      <label>Liens, un par ligne
+        <textarea id="add-urls" rows="5" placeholder="https://exemple.com/fichier.zip" required></textarea>
+      </label>
+      <label class="inline"><input type="checkbox" id="add-video"> Page vidéo (YouTube, Vimeo…) : choisir la vidéo automatiquement</label>
+      <label class="inline"><input type="checkbox" id="add-schedule"> Planifier le départ</label>
+      <label id="add-when-wrap" hidden>Démarrer à
+        <input type="datetime-local" id="add-when">
+      </label>
+      <p id="add-error" class="error" role="alert"></p>
+      <div class="actions">
+        <button type="button" id="add-cancel">Annuler</button>
+        <button type="submit" class="primary">Télécharger</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-settings">
+    <form method="dialog" id="form-settings">
+      <h2>Paramètres</h2>
+      <label>Dossier de destination
+        <span class="row2"><input id="set-dir" readonly><button type="button" id="set-pick">Parcourir…</button></span>
+      </label>
+      <div class="grid">
+        <label>Connexions par fichier <input type="number" id="set-connections" min="1" max="32"></label>
+        <label>Fichiers en parallèle <input type="number" id="set-concurrent" min="1" max="10"></label>
+        <label>Limite en Ko/s (0 = aucune) <input type="number" id="set-limit" min="0"></label>
+      </div>
+      <fieldset>
+        <legend>Plage horaire</legend>
+        <label class="inline"><input type="checkbox" id="set-sched-on"> Ne télécharger que pendant cette plage</label>
+        <div class="grid two">
+          <label>De <input type="time" id="set-sched-from"></label>
+          <label>À <input type="time" id="set-sched-to"></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Vidéos</legend>
+        <label>Qualité maximale
+          <select id="set-height">
+            <option value="360">360p</option><option value="480">480p</option><option value="720">720p</option>
+            <option value="1080">1080p</option><option value="1440">1440p</option><option value="2160">4K</option>
+          </select>
+        </label>
+        <label class="inline"><input type="checkbox" id="set-mp4"> Convertir les flux en .mp4 (ffmpeg)</label>
+        <p class="muted" id="tool-ytdlp"></p>
+        <p class="muted" id="tool-ffmpeg"></p>
+        <span class="row2"><button type="button" id="inst-ytdlp">Installer yt-dlp</button><button type="button" id="inst-ffmpeg">Installer ffmpeg</button></span>
+      </fieldset>
+      <fieldset>
+        <legend>Classement et démarrage</legend>
+        <label class="inline"><input type="checkbox" id="set-categories"> Classer par type (Vidéos, Musique, Documents…)</label>
+        <label class="inline"><input type="checkbox" id="set-tray"> Fermer la fenêtre réduit dans la zone de notification</label>
+        <label class="inline"><input type="checkbox" id="set-autostart"> Lancer avec Windows</label>
+        <label class="inline"><input type="checkbox" id="set-notif"> Notifier à la fin d’un téléchargement</label>
+        <label class="inline"><input type="checkbox" id="set-confirm"> Demander où enregistrer et quand télécharger (téléchargements du navigateur)</label>
+        <label>Quand tous les téléchargements sont terminés
+          <select id="set-after">
+            <option value="none">Ne rien faire</option>
+            <option value="quit">Quitter l’application</option>
+            <option value="sleep">Mettre l’ordinateur en veille</option>
+            <option value="shutdown">Éteindre l’ordinateur</option>
+          </select>
+        </label>
+      </fieldset>
+      <fieldset>
+        <legend>Apparence</legend>
+        <label>Thème
+          <select id="set-theme">
+            <option value="light">Clair</option>
+            <option value="dark">Sombre</option>
+            <option value="auto">Comme Windows</option>
+          </select>
+        </label>
+        <label class="inline"><input type="checkbox" id="set-glass"> Effet Liquid Glass (fenêtre translucide)</label>
+      </fieldset>
+      <fieldset>
+        <legend>Extension navigateur</legend>
+        <p class="muted">Port : <b id="info-port">–</b>. Collez ce jeton dans les options de l’extension.</p>
+        <span class="row2"><input id="info-token" readonly><button type="button" id="copy-token">Copier</button></span>
+      </fieldset>
+      <p id="set-error" class="error" role="alert"></p>
+      <div class="actions">
+        <button type="button" id="set-cancel">Fermer</button>
+        <button type="submit" class="primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

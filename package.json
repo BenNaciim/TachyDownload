@@ -1,0 +1,51 @@
+{
+  "name": "tachy-download",
+  "productName": "Tachy Download",
+  "version": "1.0.0",
+  "description": "Gestionnaire de téléchargement : segments parallèles, reprise, file d'attente, limite de vitesse, planification, extension navigateur.",
+  "author": "Tachy Download",
+  "main": "src/main.js",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/",
+    "icon": "node tools/make-icon.js",
+    "dist": "electron-builder --win nsis --x64"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "local.downloadmanager.app",
+    "productName": "Tachy Download",
+    "copyright": "MIT",
+    "electronLanguages": ["fr", "en-US"],
+    "compression": "maximum",
+    "afterPack": "tools/after-pack.js",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["src/**/*", "build/icon.png", "package.json"],
+    "extraResources": [{ "from": "extension", "to": "extension" }],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Tachy Download",
+      "uninstallDisplayName": "Tachy Download",
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "artifactName": "Tachy-Download-Setup-${version}.${ext}"
+    }
+  }
+}

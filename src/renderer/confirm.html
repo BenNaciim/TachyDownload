@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:;">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Télécharger le fichier</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="confirm.css">
+</head>
+<body class="confirm">
+  <form id="form" autocomplete="off">
+    <header>
+      <div class="file-ico"><img id="ico" alt="" width="40" height="40"></div>
+      <div class="head-text">
+        <h1 id="title">Télécharger le fichier</h1>
+        <p class="muted" id="meta"></p>
+      </div>
+      <img class="brand" src="logo.png" alt="Tachy Download" width="26" height="26">
+    </header>
+
+    <label>Adresse
+      <input id="url" readonly>
+    </label>
+    <label>Nom du fichier
+      <input id="name" spellcheck="false">
+    </label>
+    <label>Enregistrer dans
+      <span class="row2"><input id="dir" readonly><button type="button" id="pick">Parcourir…</button></span>
+      <span class="hint" id="cat"></span>
+    </label>
+    <p class="warn" id="warn" hidden></p>
+
+    <div class="actions">
+      <button type="button" id="cancel">Annuler</button>
+      <button type="button" id="later">Plus tard</button>
+      <button type="submit" class="primary" id="now">Télécharger maintenant</button>
+    </div>
+  </form>
+  <script src="confirm.js"></script>
+</body>
+</html>

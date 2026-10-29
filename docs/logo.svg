@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="140" viewBox="0 0 560 140" role="img" aria-label="Tachy Download">
+  <rect width="560" height="140" rx="26" fill="#0d1428"/>
+  <g transform="translate(28 20) scale(4.17)">
+    <rect width="24" height="24" rx="6" fill="#101a33" stroke="#24305a" stroke-width="0.4"/>
+    <path d="M5.2 16.6a7.4 7.4 0 1 1 13.6 0" fill="none" stroke="#ff7a1a" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M12 13.6 15.8 8.6" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/>
+    <circle cx="12" cy="13.6" r="1.7" fill="#fff"/>
+    <path d="M8.6 19.2 12 21.4l3.4-2.2" fill="none" stroke="#ff7a1a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="150" y="84" font-family="'Segoe UI', system-ui, -apple-system, Arial, sans-serif" font-size="48" font-weight="700" fill="#ffffff">Tachy <tspan fill="#ff7a1a">Download</tspan></text>
+</svg>
