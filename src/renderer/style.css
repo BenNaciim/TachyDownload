@@ -440,3 +440,6 @@ select option { background: #ffffff; color: #14213d; }
 }
 .glass[data-theme="dark"] .dlg-head, .glass[data-theme="dark"] dialog .actions { background: rgba(26, 35, 66, 0.9); }
 .glass .dlg-head { border-bottom-color: rgba(255, 255, 255, 0.4); }
+/* The sticky header must start at the very top: dialog padding above it would let scrolled content show through. */
+dialog { padding-top: 0; }
+.dlg-head { margin: 0 -20px 12px; padding: 16px 14px 10px 20px; }
