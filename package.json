@@ -11,7 +11,8 @@
     "start": "electron .",
     "test": "node --test test/",
     "icon": "node tools/make-icon.js",
-    "dist": "electron-builder --win nsis --x64"
+    "dist": "electron-builder --win nsis --x64 --publish never",
+    "release": "node tools/release.js"
   },
   "engines": {
     "node": ">=20"

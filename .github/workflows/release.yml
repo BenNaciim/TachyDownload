@@ -1,0 +1,52 @@
+name: Release
+
+# Run it from the repository's Actions tab ("Run workflow"): pick patch, minor or major.
+# It bumps the version, runs the tests, builds the Windows installer, commits and tags the
+# bump, then publishes a GitHub release with the installer attached.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      notes:
+        description: Release notes (empty = the commits since the last release)
+        type: string
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the notes list the commits since the previous tag
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Git identity for the version commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ inputs.notes }}
+        shell: bash
+        run: |
+          if [ -n "$NOTES" ]; then
+            node tools/release.js "${{ inputs.bump }}" --notes "$NOTES"
+          else
+            node tools/release.js "${{ inputs.bump }}"
+          fi
