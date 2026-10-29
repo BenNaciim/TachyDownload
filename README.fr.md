@@ -15,7 +15,7 @@ Gestionnaire de téléchargement rapide pour Windows : segments parallèles, rep
 - **Limite de vitesse** globale (Ko/s), partagée entre tous les segments.
 - **Planification** : départ à une date précise, et plage horaire quotidienne (peut passer minuit) hors de laquelle les téléchargements s'arrêtent.
 - **Fenêtre de confirmation** (comme IDM) : chaque téléchargement venu du navigateur ouvre une petite fenêtre avec le nom, la taille, le dossier de destination (modifiable) et trois choix : « Télécharger maintenant », « Plus tard » (ajouté en pause) ou « Annuler ». Désactivable dans Paramètres → Classement et démarrage.
-- **YouTube, Vimeo, Dailymotion, Twitch (rediffusions)** via yt-dlp et ffmpeg, téléchargés à la fin de l'installation (releases officielles GitHub, vérifiées par SHA-256). yt-dlp est remis à jour automatiquement, au plus une fois par jour. Qualité maximale réglable, H.264 + AAC de préférence.
+- **YouTube, Vimeo, Dailymotion, Twitch (rediffusions)** via yt-dlp, ffmpeg et Deno (le moteur JavaScript dont YouTube a besoin pour proposer le H.264), téléchargés à la fin de l'installation (releases officielles GitHub, vérifiées par SHA-256). yt-dlp est remis à jour automatiquement, au plus une fois par jour. Qualité maximale réglable, H.264 + AAC de préférence.
 - **Playlists YouTube** : coller l'adresse d'une playlist ajoute toutes ses vidéos (200 maximum) dans un dossier à son nom.
 - **Flux HLS** (`.m3u8`, non chiffrés ou AES-128) : téléchargés en segments, puis convertis en `.mp4` par ffmpeg sans recompression.
 - **Liens expirés** : si un lien signé meurt en cours de route, le fichier partiel est gardé. Pour une vidéo détectée par l'extension, celle-ci rouvre la page en arrière-plan, récupère la nouvelle adresse et la reprise continue toute seule. Pour un téléchargement direct, le bouton « Ouvrir la page » ramène à la page.
@@ -26,7 +26,7 @@ Gestionnaire de téléchargement rapide pour Windows : segments parallèles, rep
 
 ## Installer
 
-Téléchargez `Tachy-Download-Setup-<version>.exe` et lancez-le (installation pour l'utilisateur courant, sans droits administrateur). En fin d'installation, yt-dlp et ffmpeg sont téléchargés automatiquement ; hors connexion, ils restent installables depuis Paramètres → Vidéos.
+Téléchargez `Tachy-Download-Setup-<version>.exe` et lancez-le (installation pour l'utilisateur courant, sans droits administrateur). En fin d'installation, yt-dlp, Deno et ffmpeg sont téléchargés automatiquement ; hors connexion, ils restent installables depuis Paramètres → Vidéos.
 
 L'installateur n'est pas signé : Windows SmartScreen affichera « Windows a protégé votre ordinateur » au premier lancement (« Informations complémentaires » puis « Exécuter quand même »). Un certificat de signature de code supprime cet avertissement.
 

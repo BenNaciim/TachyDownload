@@ -15,7 +15,7 @@ Built from scratch with Electron and Node.js on plain HTTP (`Range`, `Content-Ra
 - **Speed limit**: one global limit (KB/s) shared by all segments.
 - **Scheduling**: start at a given date and time, plus a daily time window (may cross midnight) outside which downloads stop.
 - **Confirmation window** (like IDM): every download handed over by the browser opens a small window with the file name, size and destination folder (editable) and three choices: "Download now", "Later" (added paused) or "Cancel". It can be turned off in Settings → Sorting and startup.
-- **YouTube, Vimeo, Dailymotion, Twitch (replays)** through yt-dlp and ffmpeg, downloaded at the end of the install (official GitHub releases, SHA-256 verified). yt-dlp updates itself, at most once a day. Maximum quality is configurable, H.264 + AAC preferred.
+- **YouTube, Vimeo, Dailymotion, Twitch (replays)** through yt-dlp, ffmpeg and Deno (the JavaScript engine YouTube needs to offer H.264), downloaded at the end of the install (official GitHub releases, SHA-256 verified). yt-dlp updates itself, at most once a day. Maximum quality is configurable, H.264 + AAC preferred.
 - **YouTube playlists**: paste a playlist address to add all its videos (200 at most) into a folder named after it.
 - **HLS streams** (`.m3u8`, unencrypted or AES-128): downloaded in segments, then converted to `.mp4` by ffmpeg without re-encoding.
 - **Expired links**: when a signed link dies mid-download, the partial file is kept. For a video found by the extension, it reopens the page in the background, gets the new address and the download carries on by itself. For a direct download, the "Open the page" button takes you back to it.
@@ -26,7 +26,7 @@ Built from scratch with Electron and Node.js on plain HTTP (`Range`, `Content-Ra
 
 ## Install
 
-Download `Tachy-Download-Setup-<version>.exe` and run it (per-user install, no administrator rights). At the end of the install, yt-dlp and ffmpeg are downloaded automatically; offline, they can still be installed from Settings → Videos.
+Download `Tachy-Download-Setup-<version>.exe` and run it (per-user install, no administrator rights). At the end of the install, yt-dlp, Deno and ffmpeg are downloaded automatically; offline, they can still be installed from Settings → Videos.
 
 The installer is not code-signed: Windows SmartScreen shows "Windows protected your PC" on first launch ("More info", then "Run anyway"). A code-signing certificate removes that warning.
 

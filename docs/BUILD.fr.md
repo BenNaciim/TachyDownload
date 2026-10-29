@@ -34,7 +34,7 @@ Procédure pour Windows.
 
 ## Ce que fait `npm run dist`
 
-[electron-builder](https://www.electron.build) copie le moteur Electron, y place le code de `src/` dans une archive `app.asar`, supprime le fichier de licences Chromium (`tools/after-pack.js`), puis compile un installateur NSIS. Le script `build/installer.nsh` y ajoute, en fin d'installation, le téléchargement de yt-dlp et de ffmpeg. L'extension du navigateur est copiée dans `resources\extension`. La configuration est dans la section `build` de `package.json`.
+[electron-builder](https://www.electron.build) copie le moteur Electron, y place le code de `src/` dans une archive `app.asar`, supprime le fichier de licences Chromium (`tools/after-pack.js`), puis compile un installateur NSIS. Le script `build/installer.nsh` y ajoute, en fin d'installation, le téléchargement de yt-dlp, de Deno et de ffmpeg. L'extension du navigateur est copiée dans `resources\extension`. La configuration est dans la section `build` de `package.json`.
 
 ## Changer de version
 
