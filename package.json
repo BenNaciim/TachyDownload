@@ -9,7 +9,7 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/",
+    "test": "node --test \"test/*.test.js\"",
     "icon": "node tools/make-icon.js",
     "dist": "electron-builder --win nsis --x64 --publish never",
     "release": "node tools/release.js"
