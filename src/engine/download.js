@@ -7,6 +7,7 @@ const { probe } = require('./probe');
 const { sleep, uniquePath, friendlyError } = require('./util');
 
 const MIN_SEGMENT = 1024 * 1024;
+const MIN_STEAL = 2 * 1024 * 1024; // only a segment with more than this left is worth splitting
 const MAX_RETRIES = 5;
 const SPEED_WINDOW_MS = 3000;
 
@@ -190,12 +191,21 @@ class Download extends EventEmitter {
     const ticker = setInterval(() => this.emit('update'), 250);
     try {
       const pending = s.segments.filter((seg) => seg.pos <= seg.end);
+      // A connection that finishes its segment takes over half of the slowest one still running,
+      // so every connection stays busy until the very end.
+      const running = new Set();
+      const runOne = async (seg) => {
+        running.add(seg);
+        try {
+          await (s.rangeOk ? this._runRangeSegment(seg, fh, signal) : this._runStream(seg, fh, signal));
+        } finally {
+          running.delete(seg);
+        }
+        const next = s.rangeOk && !signal.aborted ? this._steal(running) : null;
+        return next ? runOne(next) : undefined;
+      };
       try {
-        await Promise.all(
-          pending.map((seg) =>
-            s.rangeOk ? this._runRangeSegment(seg, fh, signal) : this._runStream(seg, fh, signal),
-          ),
-        );
+        await Promise.all(pending.map(runOne));
       } catch (err) {
         if (err.changed && !signal.aborted) {
           // The remote file changed under us: the partial data is useless.
@@ -227,6 +237,26 @@ class Download extends EventEmitter {
     s.filename = path.basename(finalPath);
     s.completedAt = Date.now();
     this._set('completed');
+  }
+
+  /**
+   * Splits the running segment with the most bytes left: it keeps the first half and a new segment
+   * takes the second. Done synchronously, so the victim's position cannot move in between.
+   */
+  _steal(running) {
+    let victim = null;
+    for (const seg of running) {
+      const left = seg.end - seg.pos + 1;
+      if (left >= MIN_STEAL && (!victim || left > victim.end - victim.pos + 1)) victim = seg;
+    }
+    if (!victim) return null;
+    const mid = victim.pos + Math.floor((victim.end - victim.pos + 1) / 2);
+    const fresh = { start: mid, end: victim.end, pos: mid };
+    victim.end = mid - 1;
+    const segs = this.state.segments;
+    segs.splice(segs.indexOf(victim) + 1, 0, fresh);
+    this.emit('update');
+    return fresh;
   }
 
   async _write(fh, chunk, position) {
@@ -263,12 +293,19 @@ class Download extends EventEmitter {
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
+          // seg.end can shrink while we read: another connection took the tail of this segment.
           const room = seg.end - seg.pos + 1;
+          if (room <= 0) {
+            await reader.cancel().catch(() => {});
+            break;
+          }
           const chunk = value.length > room ? value.subarray(0, room) : value;
           await this.limiter.take(chunk.length, signal);
-          await this._write(fh, chunk, seg.pos);
-          seg.pos += chunk.length;
-          this.samples.push([Date.now(), chunk.length]);
+          const at = seg.pos;
+          await this._write(fh, chunk, at);
+          const kept = Math.max(0, Math.min(chunk.length, seg.end + 1 - at)); // end may have moved during the write
+          seg.pos = at + kept;
+          this.samples.push([Date.now(), kept]);
           if (seg.pos > seg.end) {
             await reader.cancel().catch(() => {});
             break;

@@ -8,7 +8,7 @@ Built from scratch with Electron and Node.js on plain HTTP (`Range`, `Content-Ra
 
 ## Features
 
-- **Parallel segments**: each file is split into 1 to 32 segments (never smaller than 1 MB), downloaded in parallel and written straight to their position in a `.part` file. The details panel shows the split and the speed of every connection.
+- **Parallel segments**: each file is split into 1 to 32 segments (never smaller than 1 MB), downloaded in parallel and written straight to their position in a `.part` file. **Dynamic re-splitting**: a connection that finishes takes half of the slowest segment still running, so all connections stay busy until the end. The details panel shows the split and the speed of every connection.
 - **Resume**: every segment's offset is saved. After a pause, a network drop or closing the app, only the missing bytes are requested again. If the remote file changed (`If-Range`), the download starts over.
 - **Servers without `Range`**: automatic fallback to a single stream (no resume possible).
 - **Queue**: configurable number of simultaneous downloads.
@@ -70,6 +70,5 @@ test/         node:test suite (local HTTP server with Range)
 
 - No FTP, no torrent.
 - No DRM (Netflix, Disney+, Prime…), no live streams, no DASH (`.mpd`). A site that serves its video in an unsupported format is not detected.
-- Segments are not re-split on the fly: a slow segment is not shared with the ones that finished.
 - The extension is tested in Chrome; for Firefox the manifest is validated (web-ext lint) but loading it end to end has not been tested.
 - Windows only for now.

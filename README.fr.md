@@ -8,7 +8,7 @@ Gestionnaire de téléchargement rapide pour Windows : segments parallèles, rep
 
 ## Fonctions
 
-- **Segments parallèles** : le fichier est découpé en 1 à 32 segments (jamais moins de 1 Mo) téléchargés en parallèle et écrits directement à leur position dans un fichier `.part`. Le panneau de détails montre le découpage et la vitesse de chaque connexion.
+- **Segments parallèles** : le fichier est découpé en 1 à 32 segments (jamais moins de 1 Mo) téléchargés en parallèle et écrits directement à leur position dans un fichier `.part`. **Redécoupage dynamique** : une connexion qui a fini prend la moitié du segment le plus lent encore en cours, pour que toutes restent occupées jusqu'à la fin. Le panneau de détails montre le découpage et la vitesse de chaque connexion.
 - **Reprise** : les offsets de chaque segment sont enregistrés. Pause, coupure réseau ou fermeture de l'application : la reprise redemande uniquement les octets manquants. Si le fichier distant a changé (`If-Range`), le téléchargement repart de zéro.
 - **Serveurs sans `Range`** : repli automatique sur un flux unique (sans reprise possible).
 - **File d'attente** : nombre de téléchargements simultanés réglable.
@@ -70,6 +70,5 @@ test/         tests node:test (serveur HTTP local avec Range)
 
 - Pas de FTP ni de torrent.
 - Pas de DRM (Netflix, Disney+, Prime…), pas de directs, pas de DASH (`.mpd`). Un site qui diffuse sa vidéo dans un format non pris en charge n'est pas détecté.
-- Les segments ne se redécoupent pas dynamiquement : un segment lent n'est pas partagé avec ceux qui ont fini.
 - L'extension est testée dans Chrome ; pour Firefox, le manifeste est validé (web-ext lint) mais le chargement réel n'a pas été testé de bout en bout.
 - Windows uniquement pour l'instant.
