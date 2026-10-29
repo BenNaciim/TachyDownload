@@ -38,7 +38,7 @@ npm start
 npm test
 ```
 
-Construire l'installateur : `npm run dist` produit `dist/Tachy-Download-Setup-<version>.exe`. Pour changer l'icône, modifier `tools/make-icon.js` puis `npm run icon`.
+Construire l'installateur (voir [docs/BUILD.fr.md](docs/BUILD.fr.md)) : `npm run dist` produit `dist/Tachy-Download-Setup-<version>.exe`. Pour changer l'icône, modifier `tools/make-icon.js` puis `npm run icon`.
 
 Les téléchargements vont par défaut dans le dossier Téléchargements. Les réglages et la liste sont enregistrés dans le dossier de données de l'application.
 

@@ -38,7 +38,7 @@ npm start
 npm test
 ```
 
-To build the installer, `npm run dist` produces `dist/Tachy-Download-Setup-<version>.exe`. To change the icon, edit `tools/make-icon.js` and run `npm run icon`.
+To build the installer (see [docs/BUILD.md](docs/BUILD.md)), `npm run dist` produces `dist/Tachy-Download-Setup-<version>.exe`. To change the icon, edit `tools/make-icon.js` and run `npm run icon`.
 
 Downloads go to your Downloads folder by default. Settings and the download list are stored in the app's data folder.
 
