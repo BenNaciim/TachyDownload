@@ -28,6 +28,14 @@ async function updateCategory() {
   $('cat').textContent = cat ? `Classé automatiquement dans le sous-dossier « ${cat} »` : '';
 }
 
+function ytChoice() {
+  if (info?.kind !== 'ytdlp' || $('yt-grid').hidden) return undefined;
+  const audioOnly = $('yt-kind').value === 'audio';
+  const height = Number($('yt-q').value) || 0;
+  const lang = $('yt-lang-wrap').hidden ? '' : $('yt-lang').value;
+  return { audioOnly, height: audioOnly ? 0 : height, lang };
+}
+
 function answer(action) {
   if (!info) return;
   const name = $('name').value.trim();
@@ -35,7 +43,32 @@ function answer(action) {
     action,
     filename: info.kind === 'ytdlp' ? '' : name,
     dir: dirTouched ? $('dir').value : '',
+    yt: ytChoice(),
   });
+}
+
+const qualityLabel = (h) => (h >= 4320 ? '8K' : h >= 2160 ? '4K (2160p)' : `${h}p`);
+
+function fillChoices(p) {
+  if (p.unavailable) {
+    // Nothing to choose from: the download still works with the default quality.
+    $('yt-status').textContent = p.error ? `${p.error} Le téléchargement utilisera la qualité par défaut.` : 'Qualité par défaut.';
+    return;
+  }
+  $('yt-status').textContent = [p.title, p.duration ? `${Math.floor(p.duration / 60)} min ${String(Math.round(p.duration % 60)).padStart(2, '0')} s` : ''].filter(Boolean).join(' · ');
+  const q = $('yt-q');
+  q.replaceChildren(new Option(`Meilleure (limite : ${qualityLabel(p.maxHeight)})`, '0'));
+  for (const h of p.heights.filter((x) => x >= 144)) q.add(new Option(qualityLabel(h), String(h)));
+  if (!p.ffmpeg) {
+    $('yt-kind').querySelector('[value="audio"]').textContent = 'Audio seul (.m4a)';
+  }
+  if (p.langs.length > 1) {
+    const l = $('yt-lang');
+    l.replaceChildren(new Option('Par défaut', ''));
+    for (const { code, label } of p.langs) l.add(new Option(label === code ? code : `${label} (${code})`, code));
+    $('yt-lang-wrap').hidden = false;
+  }
+  $('yt-grid').hidden = false;
 }
 
 (async () => {
@@ -59,7 +92,15 @@ function answer(action) {
   }
   $('name').focus();
   $('name').select();
+  if (info.kind === 'ytdlp') {
+    $('yt').hidden = false;
+    window.confirmApi.probe().then(fillChoices, () => fillChoices({ unavailable: true }));
+  }
 })();
+
+$('yt-kind').addEventListener('change', () => {
+  $('yt-q-wrap').hidden = $('yt-kind').value === 'audio';
+});
 
 let timer = null;
 $('name').addEventListener('input', () => {

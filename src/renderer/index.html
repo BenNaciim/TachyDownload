@@ -13,6 +13,7 @@
       <div class="brand"><img src="logo.png" alt="" width="34" height="34"><span>Tachy Download</span></div>
       <button id="btn-add" class="add"><svg class="i" data-i="plus"></svg>Ajouter</button>
 
+      <div class="nav-scroll">
       <nav id="nav" aria-label="Filtres">
         <button class="nav-item on" data-filter="all"><svg class="i" data-i="list"></svg><span>Tous</span><b id="c-all">0</b></button>
         <button class="nav-item" data-filter="active"><svg class="i" data-i="play"></svg><span>En cours</span><b id="c-active">0</b></button>
@@ -20,6 +21,18 @@
         <button class="nav-item" data-filter="scheduled"><svg class="i" data-i="calendar"></svg><span>Planifiés</span><b id="c-scheduled">0</b></button>
         <button class="nav-item" data-filter="done"><svg class="i" data-i="check"></svg><span>Terminés</span><b id="c-done">0</b></button>
       </nav>
+
+      <button type="button" class="nav-title" id="types-toggle" aria-expanded="true"><span>Types de fichier</span><svg class="i" data-i="chevron"></svg></button>
+      <nav id="nav-types" aria-label="Types de fichier">
+        <button class="nav-item" data-filter="type:video"><svg class="i" data-i="film"></svg><span>Vidéos</span><b id="c-type-video">0</b></button>
+        <button class="nav-item" data-filter="type:audio"><svg class="i" data-i="music"></svg><span>Musique</span><b id="c-type-audio">0</b></button>
+        <button class="nav-item" data-filter="type:doc"><svg class="i" data-i="doc"></svg><span>Documents</span><b id="c-type-doc">0</b></button>
+        <button class="nav-item" data-filter="type:archive"><svg class="i" data-i="box"></svg><span>Compressés</span><b id="c-type-archive">0</b></button>
+        <button class="nav-item" data-filter="type:app"><svg class="i" data-i="cog"></svg><span>Exécutables</span><b id="c-type-app">0</b></button>
+        <button class="nav-item" data-filter="type:image"><svg class="i" data-i="image"></svg><span>Images</span><b id="c-type-image">0</b></button>
+        <button class="nav-item" data-filter="type:other"><svg class="i" data-i="dots"></svg><span>Autres</span><b id="c-type-other">0</b></button>
+      </nav>
+      </div>
 
       <div class="side-foot">
         <button id="btn-pause-all" class="ghost"><svg class="i" data-i="pause"></svg>Tout mettre en pause</button>
@@ -29,6 +42,11 @@
     </aside>
 
     <main class="main">
+      <div class="update-bar" id="update-bar" hidden>
+        <span id="update-text"></span>
+        <button type="button" id="update-go" class="primary">Installer et redémarrer</button>
+        <button type="button" id="update-x" class="icon-btn" aria-label="Masquer"><svg class="i" data-i="x"></svg></button>
+      </div>
       <section class="hero" aria-label="Vitesse en direct">
         <div class="hero-text">
           <div class="hero-label">Vitesse totale</div>
@@ -63,8 +81,8 @@
       </div>
     </main>
 
-    <aside class="drawer" id="drawer" aria-label="Détails du téléchargement" hidden>
-      <button id="drawer-close" class="icon-btn close" aria-label="Fermer le panneau"><svg class="i" data-i="x"></svg></button>
+    <section class="drawer" id="drawer" aria-label="Détails du téléchargement" hidden>
+      <button id="drawer-close" class="icon-btn close" aria-label="Fermer les détails" title="Fermer les détails"><svg class="i" data-i="x"></svg></button>
       <div class="d-head">
         <div class="tile" id="d-tile"></div>
         <div class="d-title">
@@ -74,18 +92,24 @@
       </div>
       <div class="d-pct"><span id="d-pct">0 %</span><span class="muted" id="d-sizes"></span></div>
       <div class="bar big" id="d-bar"><i></i></div>
-      <div class="d-stats">
-        <div><span class="muted">Vitesse</span><b id="d-speed">–</b></div>
-        <div><span class="muted">Temps restant</span><b id="d-eta">–</b></div>
+      <div class="d-cols">
+        <div class="d-col">
+          <div class="d-stats">
+            <div><span class="muted">Vitesse</span><b id="d-speed">–</b></div>
+            <div><span class="muted">Temps restant</span><b id="d-eta">–</b></div>
+          </div>
+          <h3>Découpage</h3>
+          <div class="segmap" id="d-map" aria-hidden="true"></div>
+          <h3>Connexions</h3>
+          <div id="d-lanes" class="lanes"></div>
+        </div>
+        <div class="d-col">
+          <h3>Informations</h3>
+          <dl class="info" id="d-info"></dl>
+          <div class="d-actions" id="d-actions"></div>
+        </div>
       </div>
-      <h3>Découpage</h3>
-      <div class="segmap" id="d-map" aria-hidden="true"></div>
-      <h3>Connexions</h3>
-      <div id="d-lanes" class="lanes"></div>
-      <h3>Informations</h3>
-      <dl class="info" id="d-info"></dl>
-      <div class="d-actions" id="d-actions"></div>
-    </aside>
+    </section>
   </div>
 
   <dialog id="dlg-add">
@@ -140,6 +164,15 @@
             <option value="1080">1080p</option><option value="1440">1440p</option><option value="2160">4K</option>
           </select>
         </label>
+        <label>Cookies du navigateur (si YouTube demande de prouver que vous n’êtes pas un robot)
+          <select id="set-cookies">
+            <option value="">Aucun</option>
+            <option value="firefox">Firefox (recommandé)</option>
+            <option value="edge">Edge</option>
+            <option value="chrome">Chrome</option>
+            <option value="brave">Brave</option>
+          </select>
+        </label>
         <label class="inline"><input type="checkbox" id="set-mp4"> Convertir les flux en .mp4 (ffmpeg)</label>
         <p class="muted" id="tool-ytdlp"></p>
         <p class="muted" id="tool-ffmpeg"></p>
@@ -172,6 +205,12 @@
           </select>
         </label>
         <label class="inline"><input type="checkbox" id="set-glass"> Effet Liquid Glass (fenêtre translucide)</label>
+      </fieldset>
+      <fieldset>
+        <legend>Mises à jour</legend>
+        <label class="inline"><input type="checkbox" id="set-autoupdate"> Rechercher les mises à jour de Tachy Download automatiquement</label>
+        <p class="muted" id="update-status"></p>
+        <span class="row2"><button type="button" id="check-update">Rechercher maintenant</button></span>
       </fieldset>
       <fieldset>
         <legend>Extension navigateur</legend>

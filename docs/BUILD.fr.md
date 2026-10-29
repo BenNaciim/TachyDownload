@@ -22,7 +22,7 @@ Procédure pour Windows.
    ```bash
    npm install
    ```
-3. Vérifier que tout fonctionne (38 tests, une dizaine de secondes) :
+3. Vérifier que tout fonctionne (52 tests, une dizaine de secondes) :
    ```bash
    npm test
    ```

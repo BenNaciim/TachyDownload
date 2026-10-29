@@ -22,7 +22,7 @@ Steps for Windows.
    ```bash
    npm install
    ```
-3. Check that everything works (38 tests, about ten seconds):
+3. Check that everything works (52 tests, about ten seconds):
    ```bash
    npm test
    ```

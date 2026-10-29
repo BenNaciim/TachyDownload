@@ -33,3 +33,12 @@ body.confirm { margin: 0; background: var(--panel); color: var(--ink); overflow:
 .confirm .actions button:hover, .confirm .row2 button:hover { border-color: var(--accent); color: var(--accent); }
 .confirm .brand { width: 26px; height: 26px; object-fit: contain; }
 .confirm .file-ico img { width: 40px; height: 40px; object-fit: contain; }
+.confirm fieldset { border: 1px solid var(--line); border-radius: 10px; margin: 0 0 11px; padding: 8px 12px 4px; }
+.confirm fieldset[hidden], .confirm [hidden] { display: none; }
+.confirm legend { font-size: 12px; font-weight: 600; color: var(--ink-2); padding: 0 6px; }
+.confirm fieldset .muted { margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.confirm .yt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.confirm select {
+  width: 100%; box-sizing: border-box; margin-top: 5px; background: var(--bg); border: 1px solid var(--line);
+  border-radius: 9px; padding: 8px 10px; color: var(--ink);
+}

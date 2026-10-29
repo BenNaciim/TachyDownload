@@ -80,7 +80,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 /* ---------- layout ---------- */
 .app { display: grid; grid-template-columns: 226px minmax(0, 1fr); height: 100vh; position: relative; }
-.app.with-drawer { grid-template-columns: 226px minmax(0, 1fr) 340px; }
 
 .side {
   background: var(--panel);
@@ -89,7 +88,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-height: 0;
 }
+.nav-scroll { scrollbar-width: thin; flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin: 0 -6px; padding: 0 6px; }
+.nav-title {
+  display: flex; align-items: center; justify-content: space-between; width: 100%;
+  background: none; border: 0; border-radius: 8px; padding: 8px 10px 4px; margin-top: 8px;
+  color: var(--ink-2); font-size: 12px; font-weight: 600;
+}
+.nav-title:hover { color: var(--ink); }
+.nav-title .i { width: 14px; height: 14px; transition: transform 0.18s ease; }
+.nav-title.closed .i { transform: rotate(-90deg); }
+#nav-types[hidden] { display: none; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; padding: 0 4px; }
 .brand img { border-radius: 9px; }
 
@@ -173,7 +183,7 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   box-shadow: var(--shadow); cursor: pointer; transition: border-color 0.15s ease, transform 0.15s ease;
 }
 .row:hover { border-color: var(--accent); }
-.row.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); }
+.row.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .row[hidden] { display: none; }
 
 .tile {
@@ -237,20 +247,21 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .empty h2 { margin: 0 0 4px; font-size: 18px; }
 .empty p { margin: 0 0 10px; color: var(--ink-2); }
 
-/* ---------- drawer ---------- */
+/* ---------- details (accordion under the row) ---------- */
 .drawer {
-  background: var(--panel); border-left: 1px solid var(--line); padding: 18px 20px; overflow: auto;
-  position: relative; animation: slide-in 0.18s ease-out;
+  background: var(--panel); border: 1px solid var(--accent); border-top: 1px dashed var(--line);
+  border-radius: 0 0 14px 14px; margin-top: -8px; padding: 16px 20px 12px; position: relative;
+  box-shadow: 0 0 0 1px var(--accent); flex-shrink: 0;
 }
 .drawer[hidden] { display: none; }
-@keyframes slide-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
-.drawer .close { position: absolute; top: 12px; right: 12px; }
-.d-head { display: flex; gap: 12px; align-items: center; padding-right: 30px; }
-.d-title { min-width: 0; }
-.d-title h2 { margin: 0 0 4px; font-size: 15px; overflow-wrap: anywhere; line-height: 1.25; }
-.d-pct { display: flex; align-items: baseline; gap: 10px; margin-top: 16px; }
-#d-pct { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
-.d-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.drawer.unfold { animation: unfold 0.2s ease-out; transform-origin: top; }
+@keyframes unfold { from { transform: scaleY(0.9); opacity: 0; } to { transform: none; opacity: 1; } }
+.drawer .close { position: absolute; top: 8px; right: 8px; }
+.d-head, .d-pct, #d-bar { display: none; }
+.d-cols { margin-top: 14px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 8px 28px; }
+.d-col { min-width: 0; }
+.d-col > h3:first-child { margin-top: 0; }
+.d-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .d-stats div { background: var(--bg); border-radius: 10px; padding: 8px 12px; display: flex; flex-direction: column; font-size: 12px; }
 .d-stats b { font-size: 15px; font-variant-numeric: tabular-nums; }
 .drawer h3 { font-size: 13px; margin: 18px 0 6px; }
@@ -274,22 +285,22 @@ button.primary { background: var(--accent) !important; color: var(--accent-ink) 
 button.primary:hover { filter: brightness(1.07); }
 .d-actions button.danger:hover { border-color: var(--err); color: var(--err); }
 
-@media (max-width: 1100px) {
-  .app.with-drawer { grid-template-columns: 226px minmax(0, 1fr); }
-  .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 340px; box-shadow: -8px 0 28px rgba(20, 33, 61, 0.18); z-index: 5; }
+@media (max-width: 1000px) {
+  .d-cols { grid-template-columns: 1fr; }
 }
 @media (max-width: 860px) {
   .app { grid-template-columns: 70px minmax(0, 1fr); }
-  .app.with-drawer { grid-template-columns: 70px minmax(0, 1fr); }
   .brand span, .nav-item span, .ghost { font-size: 0; }
   .nav-item b { display: none; }
+  .nav-title { display: none; }
+  #nav-types[hidden] { display: flex; }
   .add { font-size: 0; }
   .hero { grid-template-columns: 1fr; }
   .r-right { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .downloading .bar > i, .bar.s-downloading > i { animation: none; }
-  .drawer { animation: none; }
+  .drawer.unfold { animation: none; }
   * { transition: none !important; }
 }
 
@@ -381,7 +392,9 @@ p.error { color: var(--err); min-height: 1.2em; margin: 4px 0; font-size: 13px; 
 .glass[data-theme="dark"] .main { background: rgba(10, 15, 32, 0.28); }
 .glass .row { border-radius: 22px; }
 .glass .search { border-radius: 999px; }
-.glass .drawer { margin: 10px 10px 10px 0; border-radius: 26px; border-left: 1px solid var(--glass-edge); }
+.glass .drawer { margin-top: -8px; border-radius: 0 0 22px 22px; border-top: 1px dashed var(--glass-edge); }
+.glass .row.selected { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.glass .drawer::before { display: none; }
 .glass dialog { border-radius: 28px; background: linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.5)); }
 .glass[data-theme="dark"] dialog { background: linear-gradient(145deg, rgba(40, 52, 90, 0.78), rgba(24, 33, 60, 0.66)); }
 .glass dialog::backdrop { background: rgba(20, 33, 61, 0.18); backdrop-filter: blur(3px); }
@@ -412,9 +425,6 @@ p.error { color: var(--err); min-height: 1.2em; margin: 4px 0; font-size: 13px; 
   .glass .side, .glass .row, .glass .drawer, .glass dialog, .glass .search { backdrop-filter: none; background: var(--panel); }
   .glass body::before { display: none; }
 }
-@media (max-width: 880px) {
-  .glass .drawer { margin: 0; border-radius: 0; }
-}
 
 /* Native controls (drop-down lists, scrollbars, date pickers) follow the theme. */
 :root { color-scheme: light; }
@@ -443,3 +453,31 @@ select option { background: #ffffff; color: #14213d; }
 /* The sticky header must start at the very top: dialog padding above it would let scrolled content show through. */
 dialog { padding-top: 0; }
 .dlg-head { margin: 0 -20px 12px; padding: 16px 14px 10px 20px; }
+.glass .drawer > .close { position: absolute; }
+
+/* ---------- update banner ---------- */
+.update-bar {
+  display: flex; align-items: center; gap: 12px; margin: 0 0 12px; padding: 8px 8px 8px 14px; flex-shrink: 0;
+  background: var(--accent-soft); color: var(--ink); border: 1px solid var(--accent); border-radius: 12px; font-weight: 500;
+}
+.update-bar[hidden] { display: none; }
+.update-bar span { flex: 1; min-width: 0; }
+.update-bar .primary { border-radius: 9px; padding: 7px 14px; border: 0; }
+.update-bar .primary:disabled { opacity: 0.7; }
+.glass .update-bar { border-radius: 999px; padding-left: 20px; }
+
+/* ---------- compact list: one step smaller so more downloads fit on screen ---------- */
+.rows { gap: 6px; }
+.row { grid-template-columns: 36px minmax(0, 1fr) auto auto; gap: 12px; padding: 8px 12px; border-radius: 12px; }
+.row .tile { width: 36px; height: 36px; border-radius: 10px; font-size: 10px; }
+.tile.has-icon img { width: 26px; height: 26px; }
+.r-name { font-size: 13.5px; }
+.r-sub { font-size: 12px; margin-top: 0; }
+.bar { height: 6px; margin-top: 5px; }
+.r-right { min-width: 96px; font-size: 13px; }
+.r-eta { font-size: 12px; }
+.row .icon-btn { width: 28px; height: 28px; }
+.glass .row { border-radius: 16px; }
+.glass .row .tile { border-radius: 11px; }
+.drawer { margin-top: -6px; }
+.glass .drawer { margin-top: -6px; border-radius: 0 0 16px 16px; }

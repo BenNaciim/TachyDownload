@@ -35,6 +35,74 @@ function listPlaylist(ytdlp, url, limit = 200) {
   });
 }
 
+/** What the user may choose for one video; anything else is dropped. */
+function cleanYtOpts(o) {
+  if (!o || typeof o !== 'object') return null;
+  const out = {};
+  if (o.audioOnly === true) out.audioOnly = true;
+  const h = Number(o.height);
+  if ([144, 240, 360, 480, 720, 1080, 1440, 2160, 4320].includes(h)) out.height = h;
+  if (typeof o.lang === 'string' && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$/.test(o.lang)) out.lang = o.lang;
+  return Object.keys(out).length ? out : null;
+}
+
+/** The yt-dlp format arguments for the chosen options (pure, so it can be tested without yt-dlp). */
+function formatArgs({ opts, maxHeight, ffmpeg }) {
+  const o = opts ?? {};
+  const lang = o.lang ? `lang:${o.lang},` : '';
+  if (o.audioOnly) {
+    // Converting to mp3 needs ffmpeg; without it the original audio (usually .m4a) is kept.
+    return ffmpeg
+      ? ['-f', 'ba/b', '-x', '--audio-format', 'mp3', '--audio-quality', '0', ...(lang ? ['-S', lang.slice(0, -1)] : [])]
+      : ['-f', 'ba[ext=m4a]/ba/b', ...(lang ? ['-S', lang.slice(0, -1)] : [])];
+  }
+  const h = o.height || maxHeight;
+  if (ffmpeg) {
+    // Prefer H.264 + AAC: plays everywhere on Windows, unlike AV1/Opus in an mp4.
+    return ['--merge-output-format', 'mp4', '-f', 'bv*+ba/b', '-S', `${lang}res:${h},vcodec:h264,acodec:m4a`];
+  }
+  return ['-f', `b[height<=${h}]/b`]; // one file with sound: no merge tool needed
+}
+
+/** Looks at a video without downloading it: title, available heights and audio languages. */
+function probeVideo(ytdlp, url, { deno, cookies } = {}) {
+  return new Promise((resolve, reject) => {
+    const args = ['-J', '--no-playlist', '--no-warnings', '--encoding', 'utf-8'];
+    if (deno) args.push('--js-runtimes', `deno:${deno}`);
+    if (cookies) args.push('--cookies-from-browser', cookies);
+    args.push(url);
+    execFile(ytdlp, args, { windowsHide: true, timeout: 60_000, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8' }, (err, stdout, stderr) => {
+      if (err) {
+        const line = String(stderr || err.message).split(/\r?\n/).find((l) => /ERROR/i.test(l)) || err.message;
+        return reject(new Error(explain(line) || line.replace(/^ERROR:\s*(\[[^\]]+\]\s*)?/i, '').slice(0, 200)));
+      }
+      try {
+        resolve(summarizeProbe(JSON.parse(stdout)));
+      } catch {
+        reject(new Error('Réponse de yt-dlp illisible'));
+      }
+    });
+  });
+}
+
+function summarizeProbe(info) {
+  const formats = Array.isArray(info.formats) ? info.formats : [];
+  const heights = [...new Set(formats.filter((f) => f.vcodec && f.vcodec !== 'none' && f.height).map((f) => f.height))].sort((a, b) => b - a);
+  const langs = new Map();
+  for (const f of formats) {
+    if (!f.acodec || f.acodec === 'none' || !f.language) continue;
+    const code = String(f.language);
+    const label = String(f.format_note || '').replace(/,.*$/, '').replace(/\s*\(default\)/i, '').trim();
+    if (!langs.has(code) || (!langs.get(code) && label)) langs.set(code, label);
+  }
+  return {
+    title: String(info.title || ''),
+    duration: Number(info.duration) || 0,
+    heights,
+    langs: [...langs].map(([code, label]) => ({ code, label: label || code })),
+  };
+}
+
 function killTree(pid) {
   return new Promise((resolve) =>
     execFile('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true }, () => resolve()),
@@ -45,7 +113,7 @@ function killTree(pid) {
 /** Turns yt-dlp's English messages into something actionable; null when the cause is unknown. */
 function explain(msg) {
   const m = String(msg || '');
-  if (/not a bot|sign in to confirm/i.test(m)) return 'YouTube demande de prouver que vous n’êtes pas un robot. Réessayez plus tard ou depuis une autre connexion.';
+  if (/not a bot|sign in to confirm/i.test(m)) return 'YouTube demande de prouver que vous n’êtes pas un robot. Dans Paramètres → Vidéos, choisissez « Cookies du navigateur » (un navigateur où vous êtes connecté à YouTube), puis réessayez.';
   if (/confirm your age|inappropriate for some users/i.test(m)) return 'Vidéo réservée aux adultes : YouTube exige une connexion.';
   if (/private video|members-only|join this channel/i.test(m)) return 'Vidéo privée ou réservée aux abonnés.';
   if (/video unavailable|this video is unavailable|has been removed|no longer available|does not exist/i.test(m)) return 'Vidéo indisponible ou supprimée.';
@@ -66,26 +134,23 @@ class YtdlpDownload extends Download {
     const s = this.state;
     const cfg = this.ctx.settings?.() ?? {};
     const ffmpeg = this.ctx.ffmpeg?.();
-    const h = Number(cfg.videoMaxHeight) || 1080;
+    const maxHeight = Number(cfg.videoMaxHeight) || 1080;
+    const opts = s.ytOpts ?? {};
     const args = [
       '--newline', '--no-colors', '--encoding', 'utf-8', '--no-playlist', '--no-mtime', '--no-simulate',
-      '--progress-template', 'download:DMP %(progress.downloaded_bytes)s %(progress.total_bytes)s %(progress.total_bytes_estimate)s',
+      '--progress-template', 'download:DMP %(progress.downloaded_bytes)s %(progress.total_bytes)s %(progress.total_bytes_estimate)s %(progress.fragment_index)s %(progress.fragment_count)s',
       '--print', 'before_dl:DMT %(title)s',
       '--print', 'after_move:DMF %(filepath)s',
       '-P', s.dir,
       '-o', '%(title).150B [%(id)s].%(ext)s',
       '--concurrent-fragments', String(Math.max(1, s.connections)),
     ];
-    if (ffmpeg) {
-      args.push('--ffmpeg-location', path.dirname(ffmpeg), '--merge-output-format', 'mp4');
-      // Prefer H.264 + AAC: plays everywhere on Windows, unlike AV1/Opus in an mp4.
-      args.push('-f', 'bv*+ba/b', '-S', `res:${h},vcodec:h264,acodec:m4a`);
-    } else {
-      args.push('-f', `b[height<=${h}]/b`); // one file with sound: no merge tool needed
-    }
+    if (ffmpeg) args.push('--ffmpeg-location', path.dirname(ffmpeg));
+    args.push(...formatArgs({ opts, maxHeight, ffmpeg }));
     // Without a JS engine YouTube hides the H.264 formats and may hide all of them.
     const deno = this.ctx.deno?.();
     if (deno) args.push('--js-runtimes', `deno:${deno}`);
+    if (cfg.ytCookies) args.push('--cookies-from-browser', cfg.ytCookies); // a signed-in browser passes YouTube's bot check
     if (cfg.speedLimitKBps > 0) args.push('--limit-rate', `${cfg.speedLimitKBps}K`);
     args.push(s.url);
     return args;
@@ -113,16 +178,20 @@ class YtdlpDownload extends Download {
     let buf = '';
     const onLine = (line) => {
       if (line.startsWith('DMP ')) {
-        const [, done, total, est] = line.split(' ');
+        const [, done, total, est, fragIndex, fragCount] = line.split(' ');
         const y = s.ytd;
         const cur = Number(done) || 0;
         if (cur < y.cur) y.base += y.total; // next stream (audio after video) restarts at zero
         if (cur > y.cur) this.samples.push([Date.now(), cur - y.cur]);
         y.cur = cur;
-        y.total = Number(total) || Number(est) || cur;
+        // Fragmented streams (most of YouTube) give no byte total: extrapolate from the fragments done.
+        const fi = Number(fragIndex);
+        const fc = Number(fragCount);
+        const byFragments = fi > 0 && fc >= fi ? Math.round((cur * fc) / fi) : 0;
+        y.total = Number(total) || Number(est) || byFragments || cur;
         s.size = Math.max(y.base + y.total, this.downloaded());
       } else if (line.startsWith('DMT ')) {
-        s.filename = sanitizeFilename(line.slice(4).trim() || 'video') + '.mp4';
+        s.filename = sanitizeFilename(line.slice(4).trim() || 'video') + (s.ytOpts?.audioOnly ? (this.ctx.ffmpeg?.() ? '.mp3' : '.m4a') : '.mp4');
       } else if (line.startsWith('DMF ')) {
         finalFile = line.slice(4).trim();
       } else if (/^ERROR:/i.test(line)) {
@@ -173,4 +242,4 @@ class YtdlpDownload extends Download {
   }
 }
 
-module.exports = { YtdlpDownload, isVideoPage, isPlaylistUrl, listPlaylist };
+module.exports = { YtdlpDownload, isVideoPage, isPlaylistUrl, listPlaylist, probeVideo, summarizeProbe, formatArgs, cleanYtOpts };

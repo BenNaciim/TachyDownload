@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const { EventEmitter } = require('node:events');
 const { Download } = require('./download');
 const { HlsDownload } = require('./hls');
-const { YtdlpDownload, isVideoPage, isPlaylistUrl, listPlaylist } = require('./ytdlp');
+const { YtdlpDownload, isVideoPage, isPlaylistUrl, listPlaylist, cleanYtOpts } = require('./ytdlp');
 const { TokenBucket } = require('./tokenBucket');
 const { sanitizeFilename, filenameFromUrl, categoryFor } = require('./util');
 
@@ -22,6 +22,8 @@ const DEFAULT_SETTINGS = {
   closeToTray: true,
   notifications: true,
   confirmDownloads: true,
+  autoUpdate: true,
+  ytCookies: '',
   afterAll: 'none',
   schedule: { enabled: false, from: '01:00', to: '07:00' },
 };
@@ -85,6 +87,8 @@ class DownloadManager extends EventEmitter {
       closeToTray: s.closeToTray !== false,
       notifications: s.notifications !== false,
       confirmDownloads: s.confirmDownloads !== false,
+      autoUpdate: s.autoUpdate !== false,
+      ytCookies: ['firefox', 'edge', 'chrome', 'brave'].includes(s.ytCookies) ? s.ytCookies : '',
       afterAll: ['none', 'quit', 'sleep', 'shutdown'].includes(s.afterAll) ? s.afterAll : 'none',
       schedule: {
         enabled: Boolean(s.schedule?.enabled),
@@ -192,6 +196,7 @@ class DownloadManager extends EventEmitter {
       completedAt: null,
       startAt: opts.startAt ? Number(opts.startAt) : null,
     };
+    if (kind === 'ytdlp') state.ytOpts = cleanYtOpts(opts.ytOpts);
     if (!state.dir) throw new Error('Aucun dossier de destination configuré');
     state.filename = this._freeName(state.dir, state.filename, isHls);
     if (state.startAt && state.startAt > Date.now()) state.status = 'scheduled';

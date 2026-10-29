@@ -26,6 +26,14 @@ const ICONS = {
   open: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
   retry: '<path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4"/>',
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"/>',
+  chevron: '<path d="M6 9l6 6 6-6"/>',
+  film: '<rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3"/>',
+  music: '<path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="16" r="2"/>',
+  doc: '<path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M10 12h5M10 16h5"/>',
+  box: '<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/>',
+  cog: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9l3 3-3 3M13 15h3"/>',
+  image: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M21 16l-5-5-8 8"/>',
+  dots: '<circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/>',
 };
 
 function icon(name) {
@@ -111,18 +119,28 @@ function kindOf(filename) {
   return { kind: 'other', label: ext ? ext.slice(0, 4).toUpperCase() : 'FILE' };
 }
 
+// A video found by yt-dlp has no extension until it is saved: it still belongs with the videos.
+function kindOfTask(snap) {
+  const k = kindOf(snap.filename);
+  if (k.kind === 'other' && (snap.kind === 'ytdlp' || snap.kind === 'hls')) {
+    return snap.ytOpts?.audioOnly ? { kind: 'audio', label: 'AUDIO' } : { kind: 'video', label: 'VIDÉO' };
+  }
+  return k;
+}
+
 // The tile first shows the coloured label, then swaps in the icon of the program
 // Windows uses to open this file type (main process: app.getFileIcon).
 const OWN_ICON_EXT = new Set(['exe', 'msi', 'scr', 'ico']);
 const iconPromises = new Map();
 function setTile(tile, snap) {
-  const k = kindOf(snap.filename);
+  const k = kindOfTask(snap);
   const ext = (/\.([A-Za-z0-9]+)(?:\.part)?$/.exec(snap.filename)?.[1] ?? '').toLowerCase();
-  const key = OWN_ICON_EXT.has(ext) && snap.status === 'completed' ? `${ext}:${snap.id}` : `ext:${ext}`;
+  const key = OWN_ICON_EXT.has(ext) && snap.status === 'completed' ? `${ext}:${snap.id}` : `ext:${ext}:${k.kind}`;
   if (tile.dataset.key === key) return;
   tile.dataset.key = key;
   tile.className = `tile t-${k.kind}`;
   tile.textContent = k.label;
+  if (!ext) return; // no type known yet: the coloured label is clearer than Windows' blank icon
   if (!iconPromises.has(key)) {
     iconPromises.set(key, window.dm.fileIcon(snap.id).catch(() => null));
   }
@@ -191,6 +209,15 @@ const GROUPS = {
   done: (s) => s === 'completed',
   all: () => true,
 };
+const TYPE_TITLES = {
+  video: 'Vidéos',
+  audio: 'Musique',
+  doc: 'Documents',
+  archive: 'Fichiers compressés',
+  app: 'Exécutables',
+  image: 'Images',
+  other: 'Autres fichiers',
+};
 const TITLES = {
   all: 'Tous les téléchargements',
   active: 'En cours',
@@ -200,7 +227,9 @@ const TITLES = {
 };
 
 function matches(snap) {
-  if (!GROUPS[currentFilter](snap.status)) return false;
+  if (currentFilter.startsWith('type:')) {
+    if (kindOfTask(snap).kind !== currentFilter.slice(5)) return false;
+  } else if (!GROUPS[currentFilter](snap.status)) return false;
   if (!searchText) return true;
   const q = searchText.toLowerCase();
   return snap.filename.toLowerCase().includes(q) || snap.url.toLowerCase().includes(q);
@@ -209,19 +238,24 @@ function matches(snap) {
 function refreshList() {
   let visible = 0;
   const counts = { all: 0, active: 0, waiting: 0, scheduled: 0, done: 0 };
+  const typeCounts = Object.fromEntries(Object.keys(TYPE_TITLES).map((k) => [k, 0]));
   for (const { snap, tr } of tasks.values()) {
     counts.all++;
     for (const g of ['active', 'waiting', 'scheduled', 'done']) if (GROUPS[g](snap.status)) counts[g]++;
+    typeCounts[kindOfTask(snap).kind]++;
     const show = matches(snap);
     tr.hidden = !show;
+    if (snap.id === selectedId) drawer.hidden = !show; // the open details follow their row
     if (show) visible++;
   }
-  for (const [g, n] of Object.entries(counts)) {
-    const b = $(`c-${g}`);
+  const setCount = (id, n) => {
+    const b = $(id);
     b.textContent = n;
     b.classList.toggle('zero', n === 0);
-  }
-  $('list-title').textContent = TITLES[currentFilter];
+  };
+  for (const [g, n] of Object.entries(counts)) setCount(`c-${g}`, n);
+  for (const [k, n] of Object.entries(typeCounts)) setCount(`c-type-${k}`, n);
+  $('list-title').textContent = currentFilter.startsWith('type:') ? TYPE_TITLES[currentFilter.slice(5)] : TITLES[currentFilter];
   const empty = visible === 0;
   $('empty').hidden = !empty;
   rowsEl.hidden = empty;
@@ -242,6 +276,24 @@ document.querySelectorAll('.nav-item[data-filter]').forEach((btn) =>
     refreshList();
   }),
 );
+// The file-type section can be folded away; the choice is remembered.
+const TYPES_KEY = 'dm-types-open';
+function setTypesOpen(open) {
+  $('nav-types').hidden = !open;
+  $('types-toggle').setAttribute('aria-expanded', String(open));
+  $('types-toggle').classList.toggle('closed', !open);
+  try {
+    localStorage.setItem(TYPES_KEY, open ? '1' : '0');
+  } catch {
+    // simply not remembered
+  }
+}
+$('types-toggle').addEventListener('click', () => setTypesOpen($('nav-types').hidden));
+try {
+  if (localStorage.getItem(TYPES_KEY) === '0') setTypesOpen(false);
+} catch {
+  // default: open
+}
 $('search').addEventListener('input', (e) => {
   searchText = e.target.value.trim();
   refreshList();
@@ -385,19 +437,26 @@ let drawerSig = '';
 let laneCount = -1;
 const laneSpeed = new Map(); // `${task}:${segment}` -> { pos, t, bps }
 
+// Accordion: one download's details open right under its row; a second click folds them away.
 function select(id) {
+  if (id === selectedId) return closeDrawer();
   selectedId = id;
   drawerSig = '';
   laneCount = -1;
-  appEl.classList.add('with-drawer');
+  const entry = tasks.get(id);
+  entry.tr.after(drawer);
   drawer.hidden = false;
+  drawer.classList.remove('unfold');
+  void drawer.offsetWidth; // restart the unfolding animation
+  drawer.classList.add('unfold');
   for (const e of tasks.values()) e.tr.classList.toggle('selected', e.snap.id === id);
-  renderDrawer(tasks.get(id).snap);
+  renderDrawer(entry.snap);
+  entry.tr.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  return undefined;
 }
 
 function closeDrawer() {
   selectedId = null;
-  appEl.classList.remove('with-drawer');
   drawer.hidden = true;
   for (const e of tasks.values()) e.tr.classList.remove('selected');
 }
@@ -569,11 +628,14 @@ function fillSettings() {
   $('set-glass').closest('label').hidden = !glassSupported;
   $('set-height').value = String(s.videoMaxHeight);
   $('set-mp4').checked = s.convertToMp4;
+  $('set-cookies').value = s.ytCookies;
   $('set-categories').checked = s.categories;
   $('set-tray').checked = s.closeToTray;
   $('set-autostart').checked = s.autoStart;
   $('set-notif').checked = s.notifications;
   $('set-confirm').checked = s.confirmDownloads;
+  $('set-autoupdate').checked = s.autoUpdate;
+  $('update-status').textContent = `Version installée : ${appState.version || '–'}`;
   $('set-after').value = s.afterAll;
   window.dm.toolsStatus().then(drawTools);
   $('info-port').textContent = appState.port || 'indisponible';
@@ -605,6 +667,51 @@ for (const key of ['ytdlp', 'deno', 'ffmpeg']) {
     }),
   );
 }
+/* ---------- app updates ---------- */
+let updateDismissed = '';
+function showUpdate(u) {
+  const bar = $('update-bar');
+  if (!u || u.version === updateDismissed) {
+    bar.hidden = true;
+    return;
+  }
+  $('update-text').textContent = `La version ${u.version} de Tachy Download est disponible.`;
+  $('update-go').textContent = u.canInstall ? 'Installer et redémarrer' : 'Voir la page de téléchargement';
+  $('update-go').disabled = false;
+  bar.hidden = false;
+}
+window.dm.onUpdateAvail(showUpdate);
+window.dm.onUpdateProgress(({ got, total }) => {
+  $('update-go').textContent = total ? `Téléchargement… ${Math.floor((got / total) * 100)} %` : 'Téléchargement…';
+});
+$('update-go').addEventListener('click', async () => {
+  const active = [...tasks.values()].filter((e) => e.snap.status === 'downloading').length;
+  if (active && !confirm(`${active} téléchargement(s) en cours seront mis en pause puis pourront être repris. Continuer ?`)) return;
+  $('update-go').disabled = true;
+  try {
+    await window.dm.installUpdate();
+  } catch (err) {
+    $('update-text').textContent = String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+    $('update-go').disabled = false;
+  }
+});
+$('update-x').addEventListener('click', () => {
+  updateDismissed = $('update-text').textContent.match(/\d+(\.\d+)+/)?.[0] ?? '';
+  $('update-bar').hidden = true;
+});
+$('check-update').addEventListener('click', async () => {
+  $('update-status').textContent = 'Recherche en cours…';
+  try {
+    const r = await window.dm.checkUpdate();
+    updateDismissed = '';
+    $('update-status').textContent = r.update
+      ? `Version ${r.update.version} disponible (installée : ${r.current}).`
+      : `Vous avez la dernière version (${r.current}).`;
+    showUpdate(r.update);
+  } catch (err) {
+    $('update-status').textContent = `Recherche impossible : ${String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`;
+  }
+});
 $('set-cancel').addEventListener('click', () => dlgSet.close());
 $('set-x').addEventListener('click', () => dlgSet.close());
 $('set-glass').addEventListener('change', (e) => {
@@ -643,6 +750,8 @@ $('form-settings').addEventListener('submit', async (e) => {
       autoStart: $('set-autostart').checked,
       notifications: $('set-notif').checked,
       confirmDownloads: $('set-confirm').checked,
+      autoUpdate: $('set-autoupdate').checked,
+      ytCookies: $('set-cookies').value,
       afterAll: $('set-after').value,
       schedule: {
         enabled: $('set-sched-on').checked,
@@ -684,6 +793,7 @@ window.dm.onSettings((s) => {
 
 (async () => {
   appState = await window.dm.state();
+  showUpdate(appState.update);
   glassSupported = Boolean(appState.glass);
   applyGlass();
   const list = await window.dm.list();

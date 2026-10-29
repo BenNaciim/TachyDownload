@@ -29,6 +29,24 @@
       <span class="row2"><input id="dir" readonly><button type="button" id="pick">Parcourir…</button></span>
       <span class="hint" id="cat"></span>
     </label>
+    <fieldset id="yt" hidden>
+      <legend>Vidéo</legend>
+      <p class="muted" id="yt-status">Analyse de la vidéo…</p>
+      <div class="yt-grid" id="yt-grid" hidden>
+        <label>Contenu
+          <select id="yt-kind">
+            <option value="video">Vidéo (.mp4)</option>
+            <option value="audio">Audio seul (.mp3)</option>
+          </select>
+        </label>
+        <label id="yt-q-wrap">Qualité
+          <select id="yt-q"></select>
+        </label>
+        <label id="yt-lang-wrap" hidden>Langue audio
+          <select id="yt-lang"></select>
+        </label>
+      </div>
+    </fieldset>
     <p class="warn" id="warn" hidden></p>
 
     <div class="actions">

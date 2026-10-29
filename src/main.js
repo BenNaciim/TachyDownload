@@ -8,9 +8,10 @@ const { DownloadManager } = require('./engine/manager');
 const { createExtensionServer } = require('./server');
 const { Tools } = require('./engine/tools');
 const { isIdle, commandFor } = require('./afterall');
-const { isPlaylistUrl } = require('./engine/ytdlp');
+const { isPlaylistUrl, isVideoPage, probeVideo } = require('./engine/ytdlp');
 const { categoryFor, filenameFromUrl, sanitizeFilename } = require('./engine/util');
-const { execFile } = require('node:child_process');
+const { execFile, spawn } = require('node:child_process');
+const updater = require('./updater');
 
 // The installer runs the app once with --setup-tools to fetch yt-dlp and ffmpeg: no window, no lock.
 const setupTools = process.argv.includes('--setup-tools');
@@ -37,6 +38,17 @@ function loadToken(dir) {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(file, token, { mode: 0o600 });
   return token;
+}
+
+let pendingUpdate = null;
+const updateSummary = (i) => ({ version: i.version, page: i.page, canInstall: Boolean(i.sha256) });
+
+/** Asks GitHub whether a newer release exists and tells the window about it. */
+async function lookForUpdate() {
+  const info = await updater.checkForUpdate({ current: app.getVersion() });
+  pendingUpdate = info;
+  send('dm:updateAvail', info && updateSummary(info));
+  return info;
 }
 
 function send(channel, payload) {
@@ -94,6 +106,8 @@ function registerIpc(token) {
   ipcMain.handle('dm:state', () => ({
     settings: manager.settings,
     port: api.port,
+    version: app.getVersion(),
+    update: pendingUpdate && updateSummary(pendingUpdate),
     token,
     glass: glassSupported(),
   }));
@@ -109,7 +123,12 @@ function registerIpc(token) {
     for (const raw of urls) {
       try {
         if (isPlaylistUrl(raw)) added.push(...(await manager.addPlaylist(str(raw), { startAt })));
-        else added.push(manager.add(str(raw), { startAt, kind }));
+        else if (manager.settings.confirmDownloads && !startAt && (kind === 'ytdlp' || isVideoPage(str(raw)))) {
+          // A video page: let the user pick the quality, the audio language and the folder first.
+          if (!/^https?:\/\//i.test(str(raw))) throw new Error('Adresse invalide');
+          askAboutDownload({ url: str(raw).trim(), kind: 'ytdlp' });
+          added.push({});
+        } else added.push(manager.add(str(raw), { startAt, kind }));
       } catch (err) {
         errors.push({ url: String(raw).slice(0, 200), error: err.message });
       }
@@ -128,6 +147,21 @@ function registerIpc(token) {
     return task ? fileIconFor(task) : null;
   });
 
+  ipcMain.handle('dm:update:check', async () => {
+    const info = await lookForUpdate();
+    return { current: app.getVersion(), update: info && updateSummary(info) };
+  });
+  ipcMain.handle('dm:update:install', async () => {
+    if (!pendingUpdate) throw new Error('Aucune mise à jour à installer');
+    if (!pendingUpdate.sha256) return shell.openExternal(pendingUpdate.page); // unverifiable: the user does it by hand
+    const file = await updater.downloadUpdate(pendingUpdate, path.join(app.getPath('temp'), 'tachy-update'), {
+      onProgress: (got, total) => send('dm:updateProgress', { got, total }),
+    });
+    // The installer replaces the app, so ours must be gone: the installer relaunches it afterwards.
+    spawn(file, ['/S', '--updated', '--force-run'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    app.quit();
+    return undefined;
+  });
   ipcMain.handle('dm:tools:status', () => tools.status());
   ipcMain.handle('dm:tools:install', async (_e, name) => {
     if (!['ytdlp', 'ffmpeg', 'deno'].includes(name)) throw new Error('Outil inconnu');
@@ -150,10 +184,10 @@ function registerIpc(token) {
 
   ipcMain.handle('dm:settings:set', (_e, patch) => {
     if (typeof patch !== 'object' || patch === null) throw new Error('Paramètres invalides');
-    const { dir, connections, maxConcurrent, speedLimitKBps, schedule, videoMaxHeight, convertToMp4, categories, autoStart, closeToTray, notifications, confirmDownloads, afterAll } = patch;
+    const { dir, connections, maxConcurrent, speedLimitKBps, schedule, videoMaxHeight, convertToMp4, categories, autoStart, closeToTray, notifications, confirmDownloads, autoUpdate, ytCookies, afterAll } = patch;
     const next = manager.setSettings({
       dir, connections, maxConcurrent, speedLimitKBps, schedule, videoMaxHeight, convertToMp4, categories, autoStart, closeToTray,
-      notifications, confirmDownloads, afterAll,
+      notifications, confirmDownloads, autoUpdate, ytCookies, afterAll,
     });
     applyAutoStart();
     return next;
@@ -200,6 +234,17 @@ function registerIpc(token) {
       defaultPath: typeof current === 'string' && current ? current : manager.settings.dir,
     });
     return r.canceled ? null : r.filePaths[0];
+  });
+  ipcMain.handle('dm:confirm:probe', async (e) => {
+    const entry = entryOf(e);
+    const ytdlp = tools.find('ytdlp');
+    if (!entry || entry.req.kind !== 'ytdlp' || isPlaylistUrl(entry.req.url)) return { unavailable: true };
+    if (!ytdlp) return { unavailable: true, error: 'yt-dlp n’est pas installé : ouvrez Paramètres → Vidéos.' };
+    try {
+      return { ...(await probeVideo(ytdlp, entry.req.url, { deno: tools.find('deno'), cookies: manager.settings.ytCookies })), ffmpeg: Boolean(tools.find('ffmpeg')), maxHeight: manager.settings.videoMaxHeight };
+    } catch (err) {
+      return { unavailable: true, error: err.message };
+    }
   });
   ipcMain.handle('dm:confirm:answer', (e, a) => {
     const entry = entryOf(e);
@@ -316,7 +361,7 @@ function askAboutDownload(req) {
   const offset = (confirms.size % 6) * 28;
   const w = new BrowserWindow({
     width: 520,
-    height: 470,
+    height: kind === 'ytdlp' ? 640 : 470,
     x: undefined,
     y: undefined,
     resizable: false,
@@ -359,6 +404,7 @@ async function finishConfirm(entry, a) {
   const opts = { referer: req.referer, cookie: req.cookie, userAgent: req.userAgent, kind: req.kind === 'file' ? undefined : req.kind, sniffed: req.sniffed, paused: a.action === 'later' };
   const name = typeof a.filename === 'string' ? a.filename.trim().slice(0, 255) : '';
   if (req.kind !== 'ytdlp' && name && (name !== entry.initialName || req.filename)) opts.filename = name;
+  if (req.kind === 'ytdlp') opts.ytOpts = a.yt;
   if (typeof a.dir === 'string' && a.dir && path.isAbsolute(a.dir)) {
     opts.dir = a.dir;
     opts.ownFolder = true;
@@ -451,6 +497,13 @@ app.whenReady().then(async () => {
       .catch(() => {}); // offline or rate-limited: try again later
   setTimeout(keepYtdlpFresh, 20_000).unref();
   setInterval(keepYtdlpFresh, 6 * 3600_000).unref();
+
+  // The app itself: a quiet look at the releases shortly after launch, then twice a day.
+  const keepAppFresh = () => {
+    if (app.isPackaged && manager.settings.autoUpdate) lookForUpdate().catch(() => {});
+  };
+  setTimeout(keepAppFresh, 45_000).unref();
+  setInterval(keepAppFresh, 12 * 3600_000).unref();
 
   manager = new DownloadManager({
     storePath: path.join(dataDir, 'downloads.json'),
