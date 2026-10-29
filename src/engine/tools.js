@@ -21,6 +21,14 @@ const SOURCES = {
     sumName: 'ffmpeg-master-latest-win64-gpl.zip',
     zip: true,
   },
+  // JavaScript engine that yt-dlp needs to solve YouTube's stream-address challenge.
+  deno: {
+    file: 'deno.exe',
+    url: 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip',
+    sums: 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip.sha256sum',
+    sumsRe: /Hash\s*:\s*([0-9a-f]{64})/i, // the .sha256sum file is a PowerShell Get-FileHash printout
+    zip: true,
+  },
 };
 
 function onPath(exe) {
@@ -49,6 +57,7 @@ class Tools extends EventEmitter {
     return {
       ytdlp: this.find('ytdlp'),
       ffmpeg: this.find('ffmpeg'),
+      deno: this.find('deno'),
       installing: this.installing,
     };
   }
@@ -105,8 +114,8 @@ class Tools extends EventEmitter {
     this._progress(name, 0, 0);
     try {
       const sums = await (await fetch(src.sums)).text();
-      const line = sums.split(/\r?\n/).find((l) => l.trim().endsWith(src.sumName));
-      const expected = /^([0-9a-f]{64})/i.exec(line ?? '')?.[1]?.toLowerCase();
+      const line = src.sumsRe ? sums : sums.split(/\r?\n/).find((l) => l.trim().endsWith(src.sumName));
+      const expected = (src.sumsRe ?? /^([0-9a-f]{64})/i).exec(line ?? '')?.[1]?.toLowerCase();
       if (!expected) throw new Error('Somme de contrôle introuvable : installation annulée');
 
       const res = await fetch(src.url, { redirect: 'follow' });
@@ -133,10 +142,11 @@ class Tools extends EventEmitter {
         fs.rmSync(outDir, { recursive: true, force: true });
         fs.mkdirSync(outDir, { recursive: true });
         await new Promise((resolve, reject) =>
-          execFile('tar.exe', ['-xf', tmp, '-C', outDir], { windowsHide: true }, (e) => (e ? reject(e) : resolve())),
+          // The Windows bsdtar by full path: a GNU tar earlier on PATH (Git for Windows) reads "C:\..." as a remote host.
+          execFile(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe'), ['-xf', tmp, '-C', outDir], { windowsHide: true }, (e) => (e ? reject(e) : resolve())),
         );
         const found = findFile(outDir, src.file);
-        if (!found) throw new Error('ffmpeg.exe absent de l’archive');
+        if (!found) throw new Error(`${src.file} absent de l’archive`);
         fs.renameSync(found, target);
         fs.rmSync(outDir, { recursive: true, force: true });
         fs.rmSync(tmp, { force: true });

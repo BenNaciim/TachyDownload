@@ -42,6 +42,20 @@ function killTree(pid) {
 }
 
 /** A download handled by the yt-dlp program: it finds the streams, we show progress and keep the file. */
+/** Turns yt-dlp's English messages into something actionable; null when the cause is unknown. */
+function explain(msg) {
+  const m = String(msg || '');
+  if (/not a bot|sign in to confirm/i.test(m)) return 'YouTube demande de prouver que vous n’êtes pas un robot. Réessayez plus tard ou depuis une autre connexion.';
+  if (/confirm your age|inappropriate for some users/i.test(m)) return 'Vidéo réservée aux adultes : YouTube exige une connexion.';
+  if (/private video|members-only|join this channel/i.test(m)) return 'Vidéo privée ou réservée aux abonnés.';
+  if (/video unavailable|this video is unavailable|has been removed|no longer available|does not exist/i.test(m)) return 'Vidéo indisponible ou supprimée.';
+  if (/not available in your country|blocked it in your country/i.test(m)) return 'Vidéo non disponible dans votre pays.';
+  if (/live event will begin|is live|premieres in/i.test(m)) return 'Direct ou première pas encore terminés : téléchargement impossible.';
+  if (/requested format is not available|no video formats|javascript runtime|n challenge/i.test(m)) return `YouTube n’a donné aucun format téléchargeable pour cette vidéo (${m.slice(0, 160)}).`;
+  if (/unable to download|getaddrinfo|timed out|network is unreachable|connection/i.test(m)) return `Problème de connexion : ${m.slice(0, 160)}`;
+  return null;
+}
+
 class YtdlpDownload extends Download {
   downloaded() {
     const y = this.state.ytd;
@@ -54,7 +68,7 @@ class YtdlpDownload extends Download {
     const ffmpeg = this.ctx.ffmpeg?.();
     const h = Number(cfg.videoMaxHeight) || 1080;
     const args = [
-      '--newline', '--no-colors', '--no-playlist', '--no-mtime', '--no-simulate',
+      '--newline', '--no-colors', '--encoding', 'utf-8', '--no-playlist', '--no-mtime', '--no-simulate',
       '--progress-template', 'download:DMP %(progress.downloaded_bytes)s %(progress.total_bytes)s %(progress.total_bytes_estimate)s',
       '--print', 'before_dl:DMT %(title)s',
       '--print', 'after_move:DMF %(filepath)s',
@@ -69,6 +83,9 @@ class YtdlpDownload extends Download {
     } else {
       args.push('-f', `b[height<=${h}]/b`); // one file with sound: no merge tool needed
     }
+    // Without a JS engine YouTube hides the H.264 formats and may hide all of them.
+    const deno = this.ctx.deno?.();
+    if (deno) args.push('--js-runtimes', `deno:${deno}`);
     if (cfg.speedLimitKBps > 0) args.push('--limit-rate', `${cfg.speedLimitKBps}K`);
     args.push(s.url);
     return args;
@@ -92,6 +109,7 @@ class YtdlpDownload extends Download {
 
     let finalFile = null;
     let lastErr = '';
+    const tail = []; // last messages yt-dlp printed, for when it fails without an ERROR line
     let buf = '';
     const onLine = (line) => {
       if (line.startsWith('DMP ')) {
@@ -109,6 +127,9 @@ class YtdlpDownload extends Download {
         finalFile = line.slice(4).trim();
       } else if (/^ERROR:/i.test(line)) {
         lastErr = line.replace(/^ERROR:\s*(\[[^\]]+\]\s*)?/i, '');
+      } else if (line && !line.startsWith('[download]')) {
+        tail.push(line.replace(/^WARNING:\s*/i, ''));
+        if (tail.length > 4) tail.shift();
       }
     };
     proc.stdout.on('data', (d) => {
@@ -131,13 +152,16 @@ class YtdlpDownload extends Download {
 
     if (signal.aborted) return;
     if (code !== 0 || !finalFile || !fs.existsSync(finalFile)) {
-      throw new FatalError(lastErr || 'yt-dlp n’a pas pu télécharger cette vidéo');
+      const detail = lastErr || tail.join(' · ');
+      throw new FatalError(explain(detail) || detail || `yt-dlp n’a pas pu télécharger cette vidéo (code ${code})`);
     }
     const name = path.basename(finalFile);
     const finalDir = this.ctx.finalDir?.(name, s.dir) ?? path.dirname(finalFile);
     fs.mkdirSync(finalDir, { recursive: true });
-    const target = uniquePath(finalDir, name, { ignorePart: true });
-    if (path.resolve(target) !== path.resolve(finalFile)) fs.renameSync(finalFile, target);
+    // yt-dlp already wrote it in place: only a move to another folder needs a free name.
+    const inPlace = path.resolve(finalDir, name) === path.resolve(finalFile);
+    const target = inPlace ? finalFile : uniquePath(finalDir, name, { ignorePart: true });
+    if (!inPlace) fs.renameSync(finalFile, target);
     s.dir = finalDir;
     s.filename = path.basename(target);
     s.size = fs.statSync(target).size;

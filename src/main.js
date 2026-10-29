@@ -130,7 +130,7 @@ function registerIpc(token) {
 
   ipcMain.handle('dm:tools:status', () => tools.status());
   ipcMain.handle('dm:tools:install', async (_e, name) => {
-    if (name !== 'ytdlp' && name !== 'ffmpeg') throw new Error('Outil inconnu');
+    if (!['ytdlp', 'ffmpeg', 'deno'].includes(name)) throw new Error('Outil inconnu');
     await tools.install(name);
     return tools.status();
   });
@@ -411,7 +411,7 @@ app.on('second-instance', () => showWindow());
 async function runSetupTools() {
   const t = new Tools(path.join(app.getPath('userData'), 'tools'));
   setTimeout(() => app.exit(0), 8 * 60 * 1000).unref();
-  for (const name of ['ytdlp', 'ffmpeg']) {
+  for (const name of ['ytdlp', 'deno', 'ffmpeg']) {
     if (t.find(name)) continue;
     try {
       await t.install(name);

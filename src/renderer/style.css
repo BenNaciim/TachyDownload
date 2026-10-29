@@ -426,3 +426,17 @@ select option { background: #ffffff; color: #14213d; }
 .segmap > div { border-radius: 4px; background: var(--idle-soft); overflow: hidden; min-width: 3px; }
 .segmap i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.25s ease; }
 .segmap > div.done i { background: var(--ok); }
+
+/* Dialog header with a close cross, and a footer that stays readable over the scrolling content. */
+.dlg-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  position: sticky; top: 0; z-index: 2; margin: -16px -20px 12px; padding: 14px 14px 10px 20px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.dlg-head h2 { margin: 0; }
+.dlg-close { flex: none; }
+.glass .dlg-head, .glass dialog .actions {
+  background: rgba(255, 255, 255, 0.78); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+.glass[data-theme="dark"] .dlg-head, .glass[data-theme="dark"] dialog .actions { background: rgba(26, 35, 66, 0.9); }
+.glass .dlg-head { border-bottom-color: rgba(255, 255, 255, 0.4); }

@@ -129,6 +129,7 @@ class DownloadManager extends EventEmitter {
     const ctx = {
       ytdlp: () => this.tools.find('ytdlp'),
       ffmpeg: () => this.tools.find('ffmpeg'),
+      deno: () => this.tools.find('deno'),
       settings: () => this.settings,
       finalDir: (name, dir) => {
         const folder = this.settings.categories && !state.ownFolder ? categoryFor(name) : null;

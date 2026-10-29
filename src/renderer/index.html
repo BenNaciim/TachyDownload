@@ -90,7 +90,10 @@
 
   <dialog id="dlg-add">
     <form method="dialog" id="form-add">
+      <div class="dlg-head">
       <h2>Ajouter des téléchargements</h2>
+      <button type="button" class="icon-btn dlg-close" id="add-x" aria-label="Fermer"><svg class="i" data-i="x"></svg></button>
+    </div>
       <label>Liens, un par ligne
         <textarea id="add-urls" rows="5" placeholder="https://exemple.com/fichier.zip" required></textarea>
       </label>
@@ -107,9 +110,12 @@
     </form>
   </dialog>
 
-  <dialog id="dlg-settings">
+  <dialog id="dlg-settings" tabindex="-1">
     <form method="dialog" id="form-settings">
+      <div class="dlg-head">
       <h2>Paramètres</h2>
+      <button type="button" class="icon-btn dlg-close" id="set-x" aria-label="Fermer"><svg class="i" data-i="x"></svg></button>
+    </div>
       <label>Dossier de destination
         <span class="row2"><input id="set-dir" readonly><button type="button" id="set-pick">Parcourir…</button></span>
       </label>
@@ -137,7 +143,8 @@
         <label class="inline"><input type="checkbox" id="set-mp4"> Convertir les flux en .mp4 (ffmpeg)</label>
         <p class="muted" id="tool-ytdlp"></p>
         <p class="muted" id="tool-ffmpeg"></p>
-        <span class="row2"><button type="button" id="inst-ytdlp">Installer yt-dlp</button><button type="button" id="inst-ffmpeg">Installer ffmpeg</button></span>
+        <p class="muted" id="tool-deno"></p>
+        <span class="row2"><button type="button" id="inst-ytdlp">Installer yt-dlp</button><button type="button" id="inst-deno">Installer Deno</button><button type="button" id="inst-ffmpeg">Installer ffmpeg</button></span>
       </fieldset>
       <fieldset>
         <legend>Classement et démarrage</legend>

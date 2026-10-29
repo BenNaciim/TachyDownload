@@ -518,6 +518,7 @@ const openAdd = () => {
 $('btn-add').addEventListener('click', openAdd);
 $('empty-add').addEventListener('click', openAdd);
 $('add-cancel').addEventListener('click', () => dlgAdd.close());
+$('add-x').addEventListener('click', () => dlgAdd.close());
 $('add-schedule').addEventListener('change', (e) => {
   $('add-when-wrap').hidden = !e.target.checked;
   if (e.target.checked && !$('add-when').value) {
@@ -582,6 +583,7 @@ $('btn-settings').addEventListener('click', () => {
   $('set-error').textContent = '';
   fillSettings();
   dlgSet.showModal();
+  dlgSet.focus(); // not the close cross, which would show a focus ring
 });
 function drawTools(st) {
   const line = (id, label, path, key) => {
@@ -592,9 +594,10 @@ function drawTools(st) {
   };
   line('tool-ytdlp', 'yt-dlp (YouTube et autres sites)', st.ytdlp, 'ytdlp');
   line('tool-ffmpeg', 'ffmpeg (fusion audio/vidéo)', st.ffmpeg, 'ffmpeg');
+  line('tool-deno', 'Deno (moteur JavaScript pour YouTube)', st.deno, 'deno');
 }
 window.dm.onTools(drawTools);
-for (const key of ['ytdlp', 'ffmpeg']) {
+for (const key of ['ytdlp', 'deno', 'ffmpeg']) {
   $('inst-' + key).addEventListener('click', () =>
     window.dm.installTool(key).then(drawTools, (err) => {
       $('set-error').textContent = String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
@@ -603,6 +606,7 @@ for (const key of ['ytdlp', 'ffmpeg']) {
   );
 }
 $('set-cancel').addEventListener('click', () => dlgSet.close());
+$('set-x').addEventListener('click', () => dlgSet.close());
 $('set-glass').addEventListener('change', (e) => {
   try {
     localStorage.setItem(GLASS_KEY, e.target.checked ? '1' : '0');
