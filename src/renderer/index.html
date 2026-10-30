@@ -210,14 +210,34 @@
       </fieldset>
       <fieldset>
         <legend>Apparence</legend>
-        <label>Thème
-          <select id="set-theme">
-            <option value="light">Clair</option>
-            <option value="dark">Sombre</option>
-            <option value="auto">Comme Windows</option>
-          </select>
-        </label>
+        <div class="set-row">
+          <span>Thème</span>
+          <div class="seg-ctl" id="set-theme" role="radiogroup" aria-label="Thème">
+            <button type="button" role="radio" data-v="auto">Auto</button>
+            <button type="button" role="radio" data-v="light">Clair</button>
+            <button type="button" role="radio" data-v="dark">Sombre</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <span>Couleur</span>
+          <div class="swatches" id="set-accent" role="radiogroup" aria-label="Couleur d’accent">
+            <button type="button" role="radio" data-v="violet" class="sw-violet" aria-label="Lilas" title="Lilas"></button>
+            <button type="button" role="radio" data-v="blue" class="sw-blue" aria-label="Bleu" title="Bleu"></button>
+            <button type="button" role="radio" data-v="pink" class="sw-pink" aria-label="Rose" title="Rose"></button>
+            <button type="button" role="radio" data-v="green" class="sw-green" aria-label="Vert" title="Vert"></button>
+            <button type="button" role="radio" data-v="orange" class="sw-orange" aria-label="Orange" title="Orange"></button>
+          </div>
+        </div>
         <label class="inline"><input type="checkbox" id="set-glass"> Effet Liquid Glass (fenêtre translucide)</label>
+        <div class="set-row" id="glass-tune">
+          <span>Transparence du verre</span>
+          <span class="range"><input type="range" id="set-glass-t" min="0" max="100" step="1" aria-label="Transparence du verre"><output id="out-glass-t"></output></span>
+        </div>
+        <div class="set-row" id="glass-tune2">
+          <span>Flou du verre</span>
+          <span class="range"><input type="range" id="set-glass-blur" min="0" max="60" step="1" aria-label="Flou du verre"><output id="out-glass-blur"></output></span>
+        </div>
+        <div class="set-row"><span class="muted">Remet le thème, la couleur et le verre par défaut.</span><button type="button" id="set-appearance-reset">Réinitialiser</button></div>
       </fieldset>
       <fieldset>
         <legend>Mises à jour</legend>

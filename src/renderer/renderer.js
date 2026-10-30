@@ -76,6 +76,40 @@ const getGlass = () => {
 const applyGlass = () => document.documentElement.classList.toggle('glass', glassSupported && getGlass());
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme(getTheme()));
 
+// Look of the glass and the accent colour: remembered here, applied as CSS variables.
+const LOOK_DEFAULTS = { accent: 'violet', glassT: 30, glassBlur: 26 };
+const lookKey = (k) => `dm-look-${k}`;
+function getLook(k) {
+  try {
+    const v = localStorage.getItem(lookKey(k));
+    if (v !== null) return k === 'accent' ? v : Number(v);
+  } catch {
+    // falls back to the default
+  }
+  return LOOK_DEFAULTS[k];
+}
+function setLook(k, v) {
+  try {
+    localStorage.setItem(lookKey(k), String(v));
+  } catch {
+    // preference simply not remembered
+  }
+}
+function applyLook() {
+  const root = document.documentElement;
+  const t = Math.min(100, Math.max(0, getLook('glassT'))) / 100;
+  // Higher transparency = lighter fill. Light glass is white veil, dark glass a faint white veil over tint.
+  root.style.setProperty('--g-a1', (0.92 - 0.8 * t).toFixed(3));
+  root.style.setProperty('--g-a2', ((0.92 - 0.8 * t) * 0.6).toFixed(3));
+  root.style.setProperty('--gd-a1', (0.28 - 0.26 * t).toFixed(3));
+  root.style.setProperty('--gd-a2', ((0.28 - 0.26 * t) * 0.35).toFixed(3));
+  root.style.setProperty('--gd-s1', (0.86 - 0.8 * t).toFixed(3));
+  root.style.setProperty('--gd-s2', (0.96 - 0.8 * t).toFixed(3));
+  root.style.setProperty('--g-blur', `${Math.min(60, Math.max(0, getLook('glassBlur')))}px`);
+  root.dataset.accent = getLook('accent');
+}
+applyLook();
+
 /* ---------- formatting ---------- */
 const UNITS = ['o', 'Ko', 'Mo', 'Go', 'To'];
 function bytesParts(n) {
@@ -706,9 +740,7 @@ function fillSettings() {
   $('set-sched-on').checked = s.schedule.enabled;
   $('set-sched-from').value = s.schedule.from;
   $('set-sched-to').value = s.schedule.to;
-  $('set-theme').value = getTheme();
-  $('set-glass').checked = getGlass();
-  $('set-glass').closest('label').hidden = !glassSupported;
+  syncAppearance();
   $('set-height').value = String(s.videoMaxHeight);
   $('set-mp4').checked = s.convertToMp4;
   $('set-cookies').value = s.ytCookies;
@@ -811,14 +843,66 @@ $('set-glass').addEventListener('change', (e) => {
     // preference simply not remembered
   }
   applyGlass();
+  syncAppearance();
 });
-$('set-theme').addEventListener('change', (e) => {
+
+/* ---------- appearance settings ---------- */
+function markChoice(group, value) {
+  for (const b of group.querySelectorAll('button')) {
+    const on = b.dataset.v === value;
+    b.setAttribute('aria-checked', String(on));
+    b.classList.toggle('on', on);
+  }
+}
+function syncAppearance() {
+  markChoice($('set-theme'), getTheme());
+  markChoice($('set-accent'), getLook('accent'));
+  $('set-glass').checked = getGlass();
+  $('set-glass').closest('label').hidden = !glassSupported;
+  $('set-glass-t').value = getLook('glassT');
+  $('set-glass-blur').value = getLook('glassBlur');
+  $('out-glass-t').textContent = `${getLook('glassT')} %`;
+  $('out-glass-blur').textContent = `${getLook('glassBlur')} px`;
+  const tune = glassSupported && getGlass();
+  for (const id of ['glass-tune', 'glass-tune2']) $(id).hidden = !tune;
+}
+$('set-theme').addEventListener('click', (e) => {
+  const v = e.target.closest('button')?.dataset.v;
+  if (!v) return;
   try {
-    localStorage.setItem(THEME_KEY, e.target.value);
+    localStorage.setItem(THEME_KEY, v);
   } catch {
     // theme still applies for this session
   }
-  applyTheme(e.target.value);
+  applyTheme(v);
+  syncAppearance();
+});
+$('set-accent').addEventListener('click', (e) => {
+  const v = e.target.closest('button')?.dataset.v;
+  if (!v) return;
+  setLook('accent', v);
+  applyLook();
+  syncAppearance();
+});
+for (const [id, key] of [['set-glass-t', 'glassT'], ['set-glass-blur', 'glassBlur']]) {
+  $(id).addEventListener('input', (e) => {
+    setLook(key, Number(e.target.value));
+    applyLook();
+    syncAppearance();
+  });
+}
+$('set-appearance-reset').addEventListener('click', () => {
+  try {
+    for (const k of Object.keys(LOOK_DEFAULTS)) localStorage.removeItem(lookKey(k));
+    localStorage.removeItem(THEME_KEY);
+    localStorage.removeItem(GLASS_KEY);
+  } catch {
+    // nothing stored to clear
+  }
+  applyTheme(getTheme());
+  applyGlass();
+  applyLook();
+  syncAppearance();
 });
 $('set-pick').addEventListener('click', async () => {
   const dir = await call(() => window.dm.pickDir());
