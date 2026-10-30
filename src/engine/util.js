@@ -58,10 +58,10 @@ const CATEGORIES = [
   ['Programmes', ['exe', 'msi', 'msix', 'iso', 'dmg', 'apk', 'deb', 'rpm', 'img']],
 ];
 
-/** Folder name for a file type, or null when it has no category. */
+/** Folder name for a file type: every type gets one, unknown ones go to "Autres". */
 function categoryFor(filename) {
   const ext = path.extname(filename).slice(1).toLowerCase();
-  return CATEGORIES.find(([, exts]) => exts.includes(ext))?.[0] ?? null;
+  return CATEGORIES.find(([, exts]) => exts.includes(ext))?.[0] ?? 'Autres';
 }
 
 function filenameFromUrl(url) {

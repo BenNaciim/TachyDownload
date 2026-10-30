@@ -124,6 +124,22 @@ function explain(msg) {
   return null;
 }
 
+/** The newest finished file in `dir` written since `since` whose name holds "[id].", or null. */
+function findByVideoId(dir, id, since) {
+  if (!id) return null;
+  let best = null;
+  try {
+    for (const f of fs.readdirSync(dir)) {
+      if (!f.includes(`[${id}].`) || /\.(part|ytdl|temp)$|\.part-/i.test(f)) continue;
+      const full = path.join(dir, f);
+      const t = fs.statSync(full).mtimeMs;
+      if (t < since) continue;
+      if (!best || t > best.t) best = { full, t };
+    }
+  } catch {}
+  return best?.full ?? null;
+}
+
 class YtdlpDownload extends Download {
   downloaded() {
     const y = this.state.ytd;
@@ -137,7 +153,7 @@ class YtdlpDownload extends Download {
     const maxHeight = Number(cfg.videoMaxHeight) || 1080;
     const opts = s.ytOpts ?? {};
     const args = [
-      '--newline', '--no-colors', '--encoding', 'utf-8', '--no-playlist', '--no-mtime', '--no-simulate',
+      '--newline', '--progress', '--no-colors', // --print implies --quiet, which would silence the progress lines '--encoding', 'utf-8', '--no-playlist', '--no-mtime', '--no-simulate',
       '--progress-template', 'download:DMP %(progress.downloaded_bytes)s %(progress.total_bytes)s %(progress.total_bytes_estimate)s %(progress.fragment_index)s %(progress.fragment_count)s',
       '--print', 'before_dl:DMT %(title)s',
       '--print', 'after_move:DMF %(filepath)s',
@@ -163,11 +179,17 @@ class YtdlpDownload extends Download {
     }
     const s = this.state;
     fs.mkdirSync(s.dir, { recursive: true });
-    s.ytd ??= { base: 0, cur: 0, total: 0 };
-    s.ytd.cur = 0;
+    // yt-dlp counts what an earlier run already left on disk, so every run starts its own tally from zero
+    // (a base kept from a paused run would be added on top and inflate the size).
+    s.ytd = { base: 0, cur: 0, total: 0 };
+    s.frag = null;
+    let firstReport = true;
+    const startedAt = Date.now();
     this.samples = [];
 
-    const proc = spawn(ytdlp, this._args(ytdlp), { windowsHide: true });
+    // Without these, yt-dlp prints non-ASCII titles through the Windows code page and mangles them (accents, full-width colons).
+    const env = { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' };
+    const proc = spawn(ytdlp, this._args(ytdlp), { windowsHide: true, env });
     const onAbort = () => killTree(proc.pid);
     signal.addEventListener('abort', onAbort, { once: true });
     const ticker = setInterval(() => this.emit('update'), 250);
@@ -178,18 +200,26 @@ class YtdlpDownload extends Download {
     let buf = '';
     const onLine = (line) => {
       if (line.startsWith('DMP ')) {
+
         const [, done, total, est, fragIndex, fragCount] = line.split(' ');
         const y = s.ytd;
         const cur = Number(done) || 0;
-        if (cur < y.cur) y.base += y.total; // next stream (audio after video) restarts at zero
-        if (cur > y.cur) this.samples.push([Date.now(), cur - y.cur]);
+        // Next stream (audio after video) restarts near zero: keep what the finished one really weighed.
+        // Parallel fragments make the figure wobble by a few KB, so only a real fall counts as a new stream.
+        if (cur < y.cur * 0.5) y.base += y.cur;
+        if (cur > y.cur && !firstReport) this.samples.push([Date.now(), cur - y.cur]); // the first figure includes a resumed part: not speed
+        firstReport = false;
         y.cur = cur;
         // Fragmented streams (most of YouTube) give no byte total: extrapolate from the fragments done.
         const fi = Number(fragIndex);
         const fc = Number(fragCount);
-        const byFragments = fi > 0 && fc >= fi ? Math.round((cur * fc) / fi) : 0;
-        y.total = Number(total) || Number(est) || byFragments || cur;
-        s.size = Math.max(y.base + y.total, this.downloaded());
+        // With parallel fragments the index lags far behind the bytes at the start, so wait for a few
+        // fragments before trusting the ratio (otherwise the total explodes to terabytes).
+        // Fragment tally for the details pane: the index wobbles with parallel fragments, so only let it grow within a stream.
+        s.frag = fc > 0 ? { done: Math.min(fc, Math.max(fi || 0, s.frag?.total === fc ? s.frag.done : 0)), total: fc } : s.frag ?? null;
+        const byFragments =fi >= Math.max(5, fc * 0.03) && fc >= fi ? Math.round((cur * fc) / fi) : 0;
+        y.total = Number(total) || Number(est) || byFragments;
+        s.size = y.total ? Math.max(y.base + y.total, this.downloaded()) : 0; // unknown until a trustworthy estimate exists
       } else if (line.startsWith('DMT ')) {
         s.filename = sanitizeFilename(line.slice(4).trim() || 'video') + (s.ytOpts?.audioOnly ? (this.ctx.ffmpeg?.() ? '.mp3' : '.m4a') : '.mp4');
       } else if (line.startsWith('DMF ')) {
@@ -220,6 +250,11 @@ class YtdlpDownload extends Download {
     });
 
     if (signal.aborted) return;
+    // The printed path can still differ from the real one (characters lost on the way): find the file by the video id in its name.
+    if (code === 0 && !(finalFile && fs.existsSync(finalFile))) {
+      const id = /\[([\w-]{11})\]\.[A-Za-z0-9]+$/.exec(finalFile ?? '')?.[1] ?? /[?&]v=([\w-]{11})|youtu\.be\/([\w-]{11})/.exec(s.url)?.slice(1).find(Boolean);
+      finalFile = findByVideoId(finalFile ? path.dirname(finalFile) : s.dir, id, startedAt - 5000) ?? finalFile;
+    }
     if (code !== 0 || !finalFile || !fs.existsSync(finalFile)) {
       const detail = lastErr || tail.join(' · ');
       throw new FatalError(explain(detail) || detail || `yt-dlp n’a pas pu télécharger cette vidéo (code ${code})`);
@@ -237,6 +272,7 @@ class YtdlpDownload extends Download {
     s.ytd.base = 0;
     s.ytd.cur = s.size;
     s.ytd.total = 0;
+    s.frag = null;
     s.completedAt = Date.now();
     this._set('completed');
   }

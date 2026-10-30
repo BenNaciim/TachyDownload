@@ -21,7 +21,7 @@ test('categoryFor maps extensions to folders', () => {
   assert.equal(categoryFor('a.PDF'), 'Documents');
   assert.equal(categoryFor('a.mkv'), 'Vidéos');
   assert.equal(categoryFor('a.iso'), 'Programmes');
-  assert.equal(categoryFor('a.xyz'), null);
+  assert.equal(categoryFor('a.xyz'), 'Autres');
 });
 
 test('video page detection', () => {

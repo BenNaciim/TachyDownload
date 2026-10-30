@@ -547,7 +547,28 @@ function renderDrawer(s) {
   $('d-eta').textContent = running && s.eta !== null ? fmtEta(s.eta) : '–';
 
   const segs = s.segments ?? [];
-  if (segs.length === 0) {
+  if (segs.length === 0 && s.kind === 'ytdlp') {
+    // yt-dlp cuts the video into small fragments itself: show how many are done.
+    laneCount = -1;
+    const f = s.frag;
+    const cells = 48;
+    if ($('d-map').children.length !== (f ? cells : 0)) {
+      $('d-map').replaceChildren(...(f ? Array.from({ length: cells }, () => el('div', { style: 'flex:1' }, el('i'))) : []));
+    }
+    if (f) {
+      const part = f.done / f.total;
+      [...$('d-map').children].forEach((cell, i) => {
+        const c = Math.max(0, Math.min(1, part * cells - i));
+        cell.firstChild.style.width = `${c * 100}%`;
+        cell.classList.toggle('done', c >= 1);
+      });
+    }
+    $('d-lanes').replaceChildren(
+      f
+        ? el('div', { className: 'lane' }, el('span', { textContent: 'Fragments' }), el('div', { className: 'track' }, Object.assign(el('i'), { style: `width:${Math.min(100, (f.done / f.total) * 100)}%` })), el('span', { textContent: `${f.done.toLocaleString('fr-FR')} / ${f.total.toLocaleString('fr-FR')}` }))
+        : el('p', { className: 'muted', textContent: 'Téléchargement géré par yt-dlp : le découpage apparaît dès que la vidéo démarre.', style: 'margin:0;font-size:12.5px' }),
+    );
+  } else if (segs.length === 0) {
     laneCount = -1;
     $('d-map').replaceChildren();
     $('d-lanes').replaceChildren(el('p', { className: 'muted', textContent: 'Les connexions apparaîtront au démarrage.', style: 'margin:0;font-size:12.5px' }));
