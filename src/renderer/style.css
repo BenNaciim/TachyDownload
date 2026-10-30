@@ -481,3 +481,37 @@ dialog { padding-top: 0; }
 .glass .row .tile { border-radius: 11px; }
 .drawer { margin-top: -6px; }
 .glass .drawer { margin-top: -6px; border-radius: 0 0 16px 16px; }
+
+/* ---------- per-download figures: percentage and speed read like the total at the top ---------- */
+.row { grid-template-columns: 36px minmax(0, 1fr) auto auto auto; }
+.r-pct {
+  min-width: 56px; text-align: right; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums; color: var(--ink);
+}
+.r-pct:empty { min-width: 0; }
+.paused .r-pct { color: var(--warn); }
+.r-speed { line-height: 1.15; }
+.r-speed b { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+.r-speed small { font-size: 12px; font-weight: 600; opacity: 0.8; }
+.r-right { min-width: 88px; }
+@media (max-width: 860px) { .r-pct { font-size: 16px; min-width: 44px; } }
+
+/* ---------- per-download speed trace ---------- */
+.defs-only { position: absolute; width: 0; height: 0; overflow: hidden; }
+:root { --spark: var(--accent); }
+:root[data-theme="dark"] { --spark: color-mix(in srgb, var(--accent) 60%, #ffffff); }
+.sp-c { stop-color: var(--spark); }
+.r-spark { display: none; width: 190px; height: 36px; color: var(--spark); overflow: visible; }
+.row.downloading { grid-template-columns: 36px minmax(0, 1fr) auto auto auto auto; }
+.row.downloading .r-spark { display: block; }
+.sp-base { stroke: var(--ink-2); stroke-opacity: 0.28; stroke-width: 1; stroke-dasharray: 1 5; stroke-linecap: round; }
+.sp-area { fill: url(#sp-fill); stroke: none; }
+.sp-line {
+  fill: none; stroke: url(#sp-line); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--spark) 60%, transparent));
+}
+.sp-head { fill: #fff; stroke: var(--spark); stroke-width: 1.6; }
+.sp-ring { fill: var(--spark); opacity: 0.45; transform-box: fill-box; transform-origin: center; animation: sp-pulse 1.6s ease-out infinite; }
+@keyframes sp-pulse { from { transform: scale(1); opacity: 0.5; } to { transform: scale(3.2); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sp-ring { animation: none; opacity: 0; } }
+@media (max-width: 1000px) { .row.downloading .r-spark { display: none; } .row.downloading { grid-template-columns: 36px minmax(0, 1fr) auto auto auto; } }

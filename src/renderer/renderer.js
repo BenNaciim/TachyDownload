@@ -300,6 +300,14 @@ $('search').addEventListener('input', (e) => {
 });
 
 /* ---------- rows ---------- */
+const SPARK_W = 190;
+const SPARK_H = 36;
+function svgEl(tag, attrs) {
+  const n = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
+  return n;
+}
+
 function buildRow(id) {
   const tile = el('div', { className: 'tile' });
   const name = el('div', { className: 'r-name' });
@@ -307,11 +315,21 @@ function buildRow(id) {
   const barFill = el('i');
   const bar = el('div', { className: 'bar' }, barFill);
   const pill = el('span', { className: 'pill' });
-  const speed = el('div', { className: 'r-speed' });
+  const speedNum = el('b');
+  const speedUnit = el('small');
+  const speed = el('div', { className: 'r-speed' }, speedNum, speedUnit);
   const eta = el('div', { className: 'r-eta' });
   const right = el('div', { className: 'r-right' }, pill, speed, eta);
+  const pct = el('div', { className: 'r-pct' });
+  // Live speed trace of this download alone: a smoothed line that fades into the past and a pulsing head.
+  const spark = svgEl('svg', { viewBox: `0 0 ${SPARK_W} ${SPARK_H}`, width: SPARK_W, height: SPARK_H, class: 'r-spark', 'aria-hidden': 'true' });
+  const sparkArea = svgEl('path', { class: 'sp-area' });
+  const sparkLine = svgEl('path', { class: 'sp-line' });
+  const sparkRing = svgEl('circle', { class: 'sp-ring', r: 3 });
+  const sparkHead = svgEl('circle', { class: 'sp-head', r: 2.6 });
+  spark.append(svgEl('line', { class: 'sp-base', x1: 0, y1: SPARK_H - 4, x2: SPARK_W, y2: SPARK_H - 4 }), sparkArea, sparkLine, sparkRing, sparkHead);
   const actions = el('div', { className: 'r-actions' });
-  const tr = el('div', { className: 'row', tabIndex: 0 }, tile, el('div', { style: 'min-width:0' }, name, sub, bar), right, actions);
+  const tr = el('div', { className: 'row', tabIndex: 0 }, tile, el('div', { style: 'min-width:0' }, name, sub, bar), spark, pct, right, actions);
   tr.setAttribute('role', 'listitem');
   tr.addEventListener('click', () => select(id));
   tr.addEventListener('keydown', (e) => {
@@ -320,7 +338,7 @@ function buildRow(id) {
       select(id);
     }
   });
-  return { tr, refs: { tile, name, sub, barFill, pill, speed, eta, actions, state: '' } };
+  return { tr, refs: { tile, name, sub, barFill, pill, speed, speedNum, speedUnit, pct, eta, actions, sparkArea, sparkLine, sparkRing, sparkHead, hist: new Array(60).fill(0), state: '' } };
 }
 
 function subline(s) {
@@ -371,7 +389,11 @@ function render(snap) {
   entry.tr.className = `row ${snap.status}${snap.id === selectedId ? ' selected' : ''}`;
 
   const running = snap.status === 'downloading';
-  r.speed.textContent = running ? fmtSpeed(snap.speed) : '';
+  // Same reading as the total speed at the top: a big number and a small unit.
+  const sp = bytesParts(snap.speed);
+  r.speedNum.textContent = running ? sp.num : '';
+  r.speedUnit.textContent = running ? ` ${sp.unit}/s` : '';
+  r.pct.textContent = snap.size && (running || snap.status === 'paused') ? `${Math.floor(barFraction(snap) * 100)} %` : '';
   r.eta.textContent = running && snap.eta !== null ? `reste ${fmtEta(snap.eta)}` : '';
   r.pill.hidden = running;
   r.pill.className = `pill p-${snap.status}`;
@@ -423,9 +445,49 @@ function drawHero(total) {
   $('chip-limit').textContent = limit > 0 ? `Limite : ${fmtSpeed(limit * 1024)}` : 'Sans limite';
 }
 
+// Catmull-Rom spline through the samples, as cubic Béziers: a soft trace instead of a jagged one.
+function smoothPath(pts) {
+  const clampY = (y) => Math.min(SPARK_H - 4, Math.max(2, y));
+  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] ?? p2;
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, clampY(p1[1] + (p2[1] - p0[1]) / 6)];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, clampY(p2[1] - (p3[1] - p1[1]) / 6)];
+    d += ` C${c1[0].toFixed(1)},${c1[1].toFixed(1)} ${c2[0].toFixed(1)},${c2[1].toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+
+function drawSpark(r) {
+  const max = Math.max(...r.hist, 256 * 1024);
+  const plotW = SPARK_W - 8; // leave room for the head
+  const pts = r.hist.map((v, i) => [(i * plotW) / (r.hist.length - 1), SPARK_H - 6 - (v / max) * (SPARK_H - 14)]);
+  const line = smoothPath(pts);
+  const last = pts[pts.length - 1];
+  r.sparkLine.setAttribute('d', line);
+  r.sparkArea.setAttribute('d', `${line} L${last[0].toFixed(1)},${SPARK_H} L0,${SPARK_H} Z`);
+  for (const c of [r.sparkRing, r.sparkHead]) {
+    c.setAttribute('cx', last[0].toFixed(1));
+    c.setAttribute('cy', last[1].toFixed(1));
+  }
+}
+
 setInterval(() => {
   let total = 0;
-  for (const { snap } of tasks.values()) if (snap.status === 'downloading') total += snap.speed;
+  for (const { snap, refs } of tasks.values()) {
+    const running = snap.status === 'downloading';
+    if (running) total += snap.speed;
+    if (running) {
+      refs.hist.push(snap.speed);
+      refs.hist.shift();
+      drawSpark(refs);
+    } else if (refs.hist.some((v) => v > 0)) {
+      refs.hist.fill(0); // the trace starts afresh when the download resumes
+    }
+  }
   history.push(total);
   history.shift();
   drawHero(total);
