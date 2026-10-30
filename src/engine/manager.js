@@ -134,9 +134,11 @@ class DownloadManager extends EventEmitter {
   _register(state) {
     const ctx = {
       ytdlp: () => this.tools.find('ytdlp'),
+      ytdlpPrefix: this.tools.ytdlpPrefix, // only set by tests, to run a stand-in script instead of yt-dlp.exe
       ffmpeg: () => this.tools.find('ffmpeg'),
       deno: () => this.tools.find('deno'),
       settings: () => this.settings,
+      diagFile: () => (this.storePath ? path.join(path.dirname(this.storePath), 'ytdlp-last.log') : null),
       finalDir: (name, dir) => {
         const folder = this.settings.categories && !state.ownFolder ? categoryFor(name) : null;
         return folder ? path.join(dir, folder) : dir;

@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('dm', {
   setSettings: (patch) => ipcRenderer.invoke('dm:settings:set', patch),
   pickDir: () => ipcRenderer.invoke('dm:pickDir'),
   copyToken: () => ipcRenderer.invoke('dm:copyToken'),
+  copyDiagnostic: () => ipcRenderer.invoke('dm:copyDiagnostic'),
   checkUpdate: () => ipcRenderer.invoke('dm:update:check'),
   installUpdate: () => ipcRenderer.invoke('dm:update:install'),
   onUpdateAvail: on('dm:updateAvail'),

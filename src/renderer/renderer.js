@@ -546,6 +546,7 @@ function renderDrawer(s) {
     if (s.status === 'downloading' || s.status === 'queued') acts.push(textButton('pause', 'Pause', () => call(() => window.dm.pause(s.id))));
     if (s.status === 'paused' || s.status === 'scheduled') acts.push(textButton('play', 'Reprendre', () => call(() => window.dm.resume(s.id)), 'primary'));
     if (s.status === 'error') acts.push(textButton('retry', 'Réessayer', () => call(() => window.dm.resume(s.id)), 'primary'));
+    if (s.status === 'error' && s.kind === 'ytdlp') acts.push(textButton('doc', 'Copier le diagnostic', () => call(() => window.dm.copyDiagnostic())));
     if (s.status === 'error' && s.needsRefresh && s.pageUrl) {
       acts.push(textButton('open', 'Ouvrir la page', () => call(() => window.dm.openPage(s.id))));
     }

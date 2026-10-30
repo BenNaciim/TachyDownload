@@ -120,6 +120,9 @@ function explain(msg) {
   if (/not available in your country|blocked it in your country/i.test(m)) return 'Vidéo non disponible dans votre pays.';
   if (/live event will begin|is live|premieres in/i.test(m)) return 'Direct ou première pas encore terminés : téléchargement impossible.';
   if (/requested format is not available|no video formats|javascript runtime|n challenge/i.test(m)) return `YouTube n’a donné aucun format téléchargeable pour cette vidéo (${m.slice(0, 160)}).`;
+  if (/http error 403|forbidden/i.test(m)) return 'YouTube a refusé le téléchargement (403). Mettez yt-dlp à jour (Paramètres → Vidéos) ou choisissez les cookies d’un navigateur connecté.';
+  if (/ffmpeg|postprocessing|merge/i.test(m)) return `La fusion de l’audio et de la vidéo a échoué : vérifiez que ffmpeg est installé (Paramètres → Vidéos). (${m.slice(0, 120)})`;
+  if (/no space left|disk full|not enough space/i.test(m)) return 'Disque plein : libérez de la place puis réessayez.';
   if (/unable to download|getaddrinfo|timed out|network is unreachable|connection/i.test(m)) return `Problème de connexion : ${m.slice(0, 160)}`;
   return null;
 }
@@ -152,6 +155,22 @@ function applyProgress(s, line, first = false) {
   return gained;
 }
 
+/** Text of the diagnostic file: what was run, everything yt-dlp said, how it ended. Pure, so it can be tested. */
+function formatDiag({ url, args, code, finalFile, fileFound, error, lines, lastProgress, at = new Date() }) {
+  return [
+    `Tachy Download – diagnostic yt-dlp, ${at.toISOString()}`,
+    `Adresse : ${url}`,
+    `Arguments : ${args.join(' ')}`,
+    `Code de sortie : ${code}`,
+    `Fichier annoncé : ${finalFile ?? '(aucun)'} — ${fileFound ? 'présent' : 'introuvable'}`,
+    `Erreur affichée : ${error || '(aucune)'}`,
+    lastProgress ? `Dernière progression : ${lastProgress}` : '',
+    '--- sortie de yt-dlp ---',
+    ...lines,
+    '',
+  ].join('\n');
+}
+
 /** The newest finished file in `dir` written since `since` whose name holds "[id].", or null. */
 function findByVideoId(dir, id, since) {
   if (!id) return null;
@@ -181,7 +200,8 @@ class YtdlpDownload extends Download {
     const maxHeight = Number(cfg.videoMaxHeight) || 1080;
     const opts = s.ytOpts ?? {};
     const args = [
-      '--newline', '--progress', '--no-colors', // --print implies --quiet, which would silence the progress lines '--encoding', 'utf-8', '--no-playlist', '--no-mtime', '--no-simulate',
+      // --print implies --quiet, which would silence the progress lines: --progress asks for them again.
+      '--newline', '--progress', '--no-colors', '--encoding', 'utf-8', '--no-playlist', '--no-mtime', '--no-simulate',
       '--progress-template', 'download:DMP %(progress.downloaded_bytes)s %(progress.total_bytes)s %(progress.total_bytes_estimate)s %(progress.fragment_index)s %(progress.fragment_count)s',
       '--print', 'before_dl:DMT %(title)s',
       '--print', 'after_move:DMF %(filepath)s',
@@ -217,16 +237,23 @@ class YtdlpDownload extends Download {
 
     // Without these, yt-dlp prints non-ASCII titles through the Windows code page and mangles them (accents, full-width colons).
     const env = { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' };
-    const proc = spawn(ytdlp, this._args(ytdlp), { windowsHide: true, env });
+    const proc = spawn(ytdlp, [...(this.ctx.ytdlpPrefix ?? []), ...this._args(ytdlp)], { windowsHide: true, env });
     const onAbort = () => killTree(proc.pid);
     signal.addEventListener('abort', onAbort, { once: true });
     const ticker = setInterval(() => this.emit('update'), 250);
 
     let finalFile = null;
     let lastErr = '';
+    const lines = []; // everything yt-dlp printed except progress, kept for the diagnostic file
+    let lastProgress = '';
     const tail = []; // last messages yt-dlp printed, for when it fails without an ERROR line
     let buf = '';
     const onLine = (line) => {
+      if (line.startsWith('DMP ')) lastProgress = line.slice(4);
+      else if (line) {
+        lines.push(line);
+        if (lines.length > 300) lines.shift();
+      }
       if (line.startsWith('DMP ')) {
         const gained = applyProgress(s, line, firstReport);
         firstReport = false;
@@ -261,6 +288,15 @@ class YtdlpDownload extends Download {
     });
 
     if (signal.aborted) return;
+    const writeDiag = (error) => {
+      const file = this.ctx.diagFile?.();
+      if (!file) return;
+      try {
+        fs.writeFileSync(file, formatDiag({ url: s.url, args: this._args(ytdlp), code, finalFile, fileFound: Boolean(finalFile && fs.existsSync(finalFile)), error, lines, lastProgress }));
+      } catch {
+        // the diagnostic is a courtesy: never fail the download over it
+      }
+    };
     // The printed path can still differ from the real one (characters lost on the way): find the file by the video id in its name.
     if (code === 0 && !(finalFile && fs.existsSync(finalFile))) {
       const id = /\[([\w-]{11})\]\.[A-Za-z0-9]+$/.exec(finalFile ?? '')?.[1] ?? /[?&]v=([\w-]{11})|youtu\.be\/([\w-]{11})/.exec(s.url)?.slice(1).find(Boolean);
@@ -268,8 +304,11 @@ class YtdlpDownload extends Download {
     }
     if (code !== 0 || !finalFile || !fs.existsSync(finalFile)) {
       const detail = lastErr || tail.join(' · ');
-      throw new FatalError(explain(detail) || detail || `yt-dlp n’a pas pu télécharger cette vidéo (code ${code})`);
+      const message = explain(detail) || detail || `yt-dlp n’a pas pu télécharger cette vidéo (code ${code})`;
+      writeDiag(message);
+      throw new FatalError(message);
     }
+    writeDiag('');
     // yt-dlp already wrote it in place: only a move to another folder needs a free name.
     const target = settleFinished(this.ctx, s, finalFile, path.basename(finalFile));
     s.size = fs.statSync(target).size;
@@ -281,4 +320,4 @@ class YtdlpDownload extends Download {
   }
 }
 
-module.exports = { YtdlpDownload, applyProgress, isVideoPage, isPlaylistUrl, listPlaylist, probeVideo, summarizeProbe, formatArgs, cleanYtOpts };
+module.exports = { YtdlpDownload, applyProgress, formatDiag, explain, isVideoPage, isPlaylistUrl, listPlaylist, probeVideo, summarizeProbe, formatArgs, cleanYtOpts };

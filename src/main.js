@@ -197,6 +197,11 @@ function registerIpc(token) {
     return r.canceled ? null : r.filePaths[0];
   });
   ipcMain.handle('dm:copyToken', () => clipboard.writeText(token));
+  ipcMain.handle('dm:copyDiagnostic', () => {
+    const file = path.join(path.dirname(manager.storePath), 'ytdlp-last.log');
+    if (!fs.existsSync(file)) throw new Error('Aucun diagnostic enregistré pour le moment');
+    clipboard.writeText(fs.readFileSync(file, 'utf8'));
+  });
 
   const entryOf = (e) => confirms.get(e.sender.id);
   ipcMain.handle('dm:confirm:init', async (e) => {
