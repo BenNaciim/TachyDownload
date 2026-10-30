@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tachy Download – Intégration",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "Envoie les téléchargements et les vidéos des pages web vers l'application Tachy Download installée sur cet ordinateur. Chrome, Edge et Firefox.",
   "permissions": [
     "downloads",

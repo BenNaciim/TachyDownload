@@ -1,7 +1,7 @@
 {
   "name": "tachy-download",
   "productName": "Tachy Download",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "Gestionnaire de téléchargement : segments parallèles, reprise, file d'attente, limite de vitesse, planification, extension navigateur.",
   "author": "Tachy Download",
   "main": "src/main.js",
