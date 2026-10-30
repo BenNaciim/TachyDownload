@@ -184,11 +184,8 @@ function registerIpc(token) {
 
   ipcMain.handle('dm:settings:set', (_e, patch) => {
     if (typeof patch !== 'object' || patch === null) throw new Error('Paramètres invalides');
-    const { dir, connections, maxConcurrent, speedLimitKBps, schedule, videoMaxHeight, convertToMp4, categories, autoStart, closeToTray, notifications, confirmDownloads, autoUpdate, ytCookies, afterAll } = patch;
-    const next = manager.setSettings({
-      dir, connections, maxConcurrent, speedLimitKBps, schedule, videoMaxHeight, convertToMp4, categories, autoStart, closeToTray,
-      notifications, confirmDownloads, autoUpdate, ytCookies, afterAll,
-    });
+    // The manager keeps only the settings it knows (see _normalize), so the patch goes straight through.
+    const next = manager.setSettings(patch);
     applyAutoStart();
     return next;
   });

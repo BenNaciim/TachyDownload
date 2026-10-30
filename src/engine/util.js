@@ -2,6 +2,7 @@
 
 const path = require('node:path');
 const fs = require('node:fs');
+const { typeOf, OTHER_FOLDER } = require('../shared/filetypes');
 
 const RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
 
@@ -49,19 +50,26 @@ function filenameFromContentDisposition(header) {
   return plain ? plain[1].trim() : null;
 }
 
-const CATEGORIES = [
-  ['Vidéos', ['mp4', 'mkv', 'avi', 'mov', 'webm', 'wmv', 'flv', 'm4v', 'ts']],
-  ['Musique', ['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a', 'opus']],
-  ['Images', ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'avif', 'tif', 'tiff']],
-  ['Documents', ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'odt', 'csv', 'epub']],
-  ['Archives', ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'tgz']],
-  ['Programmes', ['exe', 'msi', 'msix', 'iso', 'dmg', 'apk', 'deb', 'rpm', 'img']],
-];
-
 /** Folder name for a file type: every type gets one, unknown ones go to "Autres". */
 function categoryFor(filename) {
-  const ext = path.extname(filename).slice(1).toLowerCase();
-  return CATEGORIES.find(([, exts]) => exts.includes(ext))?.[0] ?? 'Autres';
+  return typeOf(filename)?.folder ?? OTHER_FOLDER;
+}
+
+/**
+ * End of a download, shared by every engine: moves the finished file `from` into its final folder (the
+ * type folder when that setting is on), under a free name, then records where it ended up on the task
+ * state. A file already in the right place is left alone. Returns the final path.
+ */
+function settleFinished(ctx, s, from, name) {
+  const finalDir = ctx.finalDir?.(name, s.dir) ?? path.dirname(from);
+  fs.mkdirSync(finalDir, { recursive: true });
+  const inPlace = path.resolve(finalDir, name) === path.resolve(from);
+  const target = inPlace ? from : uniquePath(finalDir, name, { ignorePart: true });
+  if (!inPlace) fs.renameSync(from, target);
+  s.dir = finalDir;
+  s.filename = path.basename(target);
+  s.completedAt = Date.now();
+  return target;
 }
 
 function filenameFromUrl(url) {
@@ -118,7 +126,7 @@ function friendlyError(err) {
 
 module.exports = {
   categoryFor,
-  CATEGORIES,
+  settleFinished,
   friendlyError,
   sleep,
   sanitizeFilename,

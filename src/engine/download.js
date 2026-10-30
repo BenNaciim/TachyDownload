@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const { probe } = require('./probe');
-const { sleep, uniquePath, friendlyError } = require('./util');
+const { sleep, uniquePath, friendlyError, settleFinished } = require('./util');
 
 const MIN_SEGMENT = 1024 * 1024;
 const MIN_STEAL = 2 * 1024 * 1024; // only a segment with more than this left is worth splitting
@@ -231,13 +231,7 @@ class Download extends EventEmitter {
     }
     if (signal.aborted) return;
     // Our own .part file reserves the name, so only a finished file can collide here.
-    const finalDir = this.ctx.finalDir?.(s.filename, s.dir) ?? s.dir;
-    fs.mkdirSync(finalDir, { recursive: true });
-    const finalPath = uniquePath(finalDir, s.filename, { ignorePart: true });
-    fs.renameSync(this.partPath, finalPath);
-    s.dir = finalDir;
-    s.filename = path.basename(finalPath);
-    s.completedAt = Date.now();
+    settleFinished(this.ctx, s, this.partPath, s.filename);
     this._set('completed');
   }
 

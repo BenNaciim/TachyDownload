@@ -2,13 +2,7 @@
 
 const $ = (id) => document.getElementById(id);
 
-try {
-  const theme = localStorage.getItem('dm-theme') || 'light';
-  const dark = theme === 'dark' || (theme === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
-  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-} catch {
-  document.documentElement.dataset.theme = 'light';
-}
+// Theme, accent colour and glass come from appearance.js, the same as the main window.
 
 const fmtSize = (n) => {
   if (n >= 1073741824) return `${(n / 1073741824).toFixed(2).replace('.', ',')} Go`;

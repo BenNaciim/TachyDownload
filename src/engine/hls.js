@@ -5,7 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { execFile } = require('node:child_process');
 const { Download, FatalError, httpError } = require('./download');
-const { sleep, uniquePath } = require('./util');
+const { sleep, settleFinished } = require('./util');
 
 const MAX_RETRIES = 4;
 
@@ -219,15 +219,9 @@ class HlsDownload extends Download {
       }
     }
 
-    const finalDir = this.ctx.finalDir?.(s.filename, s.dir) ?? s.dir;
-    fs.mkdirSync(finalDir, { recursive: true });
-    const finalPath = uniquePath(finalDir, s.filename, { ignorePart: true });
-    fs.renameSync(this.partPath, finalPath);
-    s.dir = finalDir;
-    s.filename = path.basename(finalPath);
+    const finalPath = settleFinished(this.ctx, s, this.partPath, s.filename);
     s.size = fs.statSync(finalPath).size;
     s.hls.bytes = s.size;
-    s.completedAt = Date.now();
     this._set('completed');
   }
 }

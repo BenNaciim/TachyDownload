@@ -264,6 +264,8 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .d-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .d-stats div { background: var(--bg); border-radius: 10px; padding: 8px 12px; display: flex; flex-direction: column; font-size: 12px; }
 .d-stats b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.d-stats div { color: var(--ink-2); border: 1px solid var(--line); }
+.d-stats b { color: var(--ink); }
 .drawer h3 { font-size: 13px; margin: 18px 0 6px; }
 
 .lanes { display: flex; flex-direction: column; gap: 6px; }
@@ -358,16 +360,19 @@ p.error { color: var(--err); min-height: 1.2em; margin: 4px 0; font-size: 13px; 
 .glass body { background: transparent; }
 
 /* soft colour behind the panes, so the glass has something to bend */
-.glass body::before {
+body::before {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
-    radial-gradient(520px 380px at 12% 8%, rgba(70, 120, 255, 0.34), transparent 70%),
-    radial-gradient(480px 360px at 92% 18%, rgba(160, 90, 255, 0.26), transparent 70%),
-    radial-gradient(560px 420px at 70% 96%, rgba(0, 200, 190, 0.26), transparent 70%);
+    radial-gradient(560px 380px at 10% 0, rgba(140, 80, 255, var(--halo, 0.5)), transparent 70%),
+    radial-gradient(500px 380px at 95% 15%, rgba(0, 200, 255, calc(var(--halo, 0.5) * 0.64)), transparent 70%),
+    radial-gradient(520px 320px at 55% 115%, rgba(255, 70, 170, calc(var(--halo, 0.5) * 0.6)), transparent 70%);
 }
+/* without glass the panes are opaque: the same halos, softer, show in the gaps around them */
+:root:not(.glass) { --halo: 0.2; }
+:root:not(.glass)[data-theme="dark"] { --halo: 0.26; }
 
 /* the glass recipe: blur + saturation, a lit top edge, a faint lower edge, a drop shadow */
-.glass .side, .glass .row, .glass .drawer, .glass dialog, .glass .search, .glass .d-stats div {
+.glass .side, .glass .row, .glass .drawer, .glass dialog, .glass .search {
   background: var(--glass-fill);
   border: 1px solid var(--glass-edge);
   backdrop-filter: blur(var(--g-blur, 26px)) saturate(1.9) brightness(1.04);
@@ -375,7 +380,7 @@ p.error { color: var(--err); min-height: 1.2em; margin: 4px 0; font-size: 13px; 
   box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.75), inset 0 -1px 0 rgba(255, 255, 255, 0.18), var(--glass-shadow);
 }
 .glass[data-theme="dark"] .side, .glass[data-theme="dark"] .row, .glass[data-theme="dark"] .drawer,
-.glass[data-theme="dark"] dialog, .glass[data-theme="dark"] .search, .glass[data-theme="dark"] .d-stats div {
+.glass[data-theme="dark"] dialog, .glass[data-theme="dark"] .search {
   box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 0 rgba(255, 255, 255, 0.06), var(--glass-shadow);
 }
 
@@ -585,13 +590,6 @@ body { font-size: 13.5px; }
   backdrop-filter: blur(var(--g-blur, 26px)) saturate(1.9); -webkit-backdrop-filter: blur(var(--g-blur, 26px)) saturate(1.9);
 }
 
-/* aurora halos behind the glass */
-.glass body::before {
-  background:
-    radial-gradient(560px 380px at 10% 0, rgba(140, 80, 255, 0.5), transparent 70%),
-    radial-gradient(500px 380px at 95% 15%, rgba(0, 200, 255, 0.32), transparent 70%),
-    radial-gradient(520px 320px at 55% 115%, rgba(255, 70, 170, 0.3), transparent 70%);
-}
 :root:not(.glass) body { background: var(--bg); }
 :root:not(.glass)[data-theme="dark"] .side, :root:not(.glass)[data-theme="dark"] .row { background: var(--panel); }
 @media (max-width: 860px) { .app { grid-template-columns: 70px minmax(0, 1fr); } }
@@ -635,25 +633,7 @@ body { font-size: 13.5px; }
 }
 .row .tile.has-icon, .glass .row .tile.has-icon { border-radius: 50%; }
 .glass .side { margin: 0; border-radius: 0; border-width: 0 1px 0 0; }
-.glass .main, .glass[data-theme="dark"] .main { background: none; }
-.glass body::before {
-  background:
-    radial-gradient(620px 420px at 8% 0, rgba(140, 80, 255, 0.78), transparent 70%),
-    radial-gradient(560px 420px at 96% 14%, rgba(0, 200, 255, 0.55), transparent 70%),
-    radial-gradient(600px 360px at 55% 118%, rgba(255, 70, 170, 0.55), transparent 70%);
-}
-
-/* halos back to a moderate strength: the stronger values blew out the glass */
-.glass body::before {
-  background:
-    radial-gradient(560px 380px at 10% 0, rgba(140, 80, 255, 0.5), transparent 70%),
-    radial-gradient(500px 380px at 95% 15%, rgba(0, 200, 255, 0.32), transparent 70%),
-    radial-gradient(520px 320px at 55% 115%, rgba(255, 70, 170, 0.3), transparent 70%);
-}
-
-/* the main pane needs its original tint: without it the halos render unblended */
-.glass .main { background: rgba(255, 255, 255, 0.3); }
-.glass[data-theme="dark"] .main { background: rgba(10, 15, 32, 0.28); }
+/* (the .glass .main tint above is needed: without it the halos render unblended) */
 
 /* light theme legibility: darker secondary ink, and sidebar labels in full ink over the lilac glass */
 :root:not([data-theme="dark"]) { --ink: #170d38; --ink-2: #453b6b; }

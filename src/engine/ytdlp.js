@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, execFile } = require('node:child_process');
 const { Download, FatalError } = require('./download');
-const { uniquePath, sanitizeFilename } = require('./util');
+const { sanitizeFilename, settleFinished } = require('./util');
 
 /** Pages that yt-dlp handles and that the browser cannot give as a plain file. */
 const VIDEO_PAGE = [
@@ -270,21 +270,13 @@ class YtdlpDownload extends Download {
       const detail = lastErr || tail.join(' · ');
       throw new FatalError(explain(detail) || detail || `yt-dlp n’a pas pu télécharger cette vidéo (code ${code})`);
     }
-    const name = path.basename(finalFile);
-    const finalDir = this.ctx.finalDir?.(name, s.dir) ?? path.dirname(finalFile);
-    fs.mkdirSync(finalDir, { recursive: true });
     // yt-dlp already wrote it in place: only a move to another folder needs a free name.
-    const inPlace = path.resolve(finalDir, name) === path.resolve(finalFile);
-    const target = inPlace ? finalFile : uniquePath(finalDir, name, { ignorePart: true });
-    if (!inPlace) fs.renameSync(finalFile, target);
-    s.dir = finalDir;
-    s.filename = path.basename(target);
+    const target = settleFinished(this.ctx, s, finalFile, path.basename(finalFile));
     s.size = fs.statSync(target).size;
     s.ytd.base = 0;
     s.ytd.cur = s.size;
     s.ytd.total = 0;
     s.frag = null;
-    s.completedAt = Date.now();
     this._set('completed');
   }
 }
