@@ -1,7 +1,7 @@
 {
   "name": "tachy-download",
   "productName": "Tachy Download",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Gestionnaire de téléchargement : segments parallèles, reprise, file d'attente, limite de vitesse, planification, extension navigateur.",
   "author": "Tachy Download",
   "main": "src/main.js",
@@ -25,14 +25,36 @@
     "appId": "local.downloadmanager.app",
     "productName": "Tachy Download",
     "copyright": "MIT",
-    "electronLanguages": ["fr", "en-US"],
+    "electronLanguages": [
+      "fr",
+      "en-US"
+    ],
     "compression": "maximum",
     "afterPack": "tools/after-pack.js",
-    "directories": { "output": "dist", "buildResources": "build" },
-    "files": ["src/**/*", "build/icon.png", "package.json"],
-    "extraResources": [{ "from": "extension", "to": "extension" }],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "extension",
+        "to": "extension"
+      }
+    ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.ico"
     },
     "nsis": {
