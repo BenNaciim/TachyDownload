@@ -673,12 +673,15 @@ function showUpdate(u) {
   const bar = $('update-bar');
   if (!u || u.version === updateDismissed) {
     bar.hidden = true;
+    $('install-update').hidden = !u;
     return;
   }
   $('update-text').textContent = `La version ${u.version} de Tachy Download est disponible.`;
   $('update-go').textContent = u.canInstall ? 'Installer et redémarrer' : 'Voir la page de téléchargement';
   $('update-go').disabled = false;
   bar.hidden = false;
+  $('install-update').textContent = $('update-go').textContent;
+  $('install-update').hidden = false;
 }
 window.dm.onUpdateAvail(showUpdate);
 window.dm.onUpdateProgress(({ got, total }) => {
@@ -698,6 +701,10 @@ $('update-go').addEventListener('click', async () => {
 $('update-x').addEventListener('click', () => {
   updateDismissed = $('update-text').textContent.match(/\d+(\.\d+)+/)?.[0] ?? '';
   $('update-bar').hidden = true;
+});
+$('install-update').addEventListener('click', () => {
+  dlgSet.close();
+  $('update-go').click();
 });
 $('check-update').addEventListener('click', async () => {
   $('update-status').textContent = 'Recherche en cours…';
