@@ -113,6 +113,8 @@ class DownloadManager extends EventEmitter {
     for (const state of data.tasks ?? []) {
       // Anything that was in flight when the app closed waits for the user.
       if (state.status === 'downloading') state.status = 'paused';
+      // A finished download never needs its session cookie again (older versions kept it on disk).
+      if (state.status === 'completed' && state.headers) state.headers.cookie = '';
       this._register(state);
     }
   }
@@ -187,7 +189,8 @@ class DownloadManager extends EventEmitter {
       lastModified: null,
       headers: {
         referer: opts.referer || '',
-        cookie: opts.cookie || '',
+        // yt-dlp reads the cookies of the chosen browser itself: nothing to keep for it.
+        cookie: kind === 'ytdlp' ? '' : opts.cookie || '',
         userAgent: opts.userAgent || '',
       },
       status: 'queued',

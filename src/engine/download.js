@@ -80,6 +80,7 @@ class Download extends EventEmitter {
     const { size } = this.state;
     return {
       ...this.state,
+      headers: this.state.headers && { ...this.state.headers, cookie: '' }, // the window has no use for the cookie
       segments: this.state.segments?.map((s) => ({ ...s })) ?? null,
       downloaded,
       speed,
@@ -89,6 +90,7 @@ class Download extends EventEmitter {
 
   _set(status, error = null) {
     this.state.status = status;
+    if (status === 'completed' && this.state.headers) this.state.headers.cookie = ''; // not needed any more, do not keep it on disk
     this.state.error = error;
     this.emit('update');
   }

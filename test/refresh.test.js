@@ -109,7 +109,7 @@ test('API: /refresh-requests lists them, /refresh swaps the link (token required
     assert.equal(ok.status, 200);
     await waitFor(() => m.list()[0].status === 'completed');
     assert.deepEqual(fs.readFileSync(path.join(dir, 'a.bin')), body);
-    assert.equal(m.list()[0].headers.cookie, 'a=b');
+    assert.equal(m.tasks.get(t.id).state.headers.cookie, '', 'the new cookie is dropped once the download is finished');
   } finally {
     await api.close();
     await m.shutdown();

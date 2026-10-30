@@ -8,7 +8,9 @@ const path = require('node:path');
 const { DownloadManager } = require('../src/engine/manager');
 const { tmpDir, randomBody, waitFor } = require('./helpers');
 
-const SIZE = 8 * 1024 * 1024;
+// Four segments of 4 MiB: a segment still has at least MIN_STEAL (2 MiB) left for its first 2.5 s, so
+// the other connections finding it slow cannot miss the window on a fast machine.
+const SIZE = 16 * 1024 * 1024;
 
 /** Range server where the first eighth of the file is served slowly and everything after it fast. */
 function slowHeadServer(body, slowBytesPerSec) {
@@ -48,7 +50,7 @@ function slowHeadServer(body, slowBytesPerSec) {
 
 async function setup() {
   const body = randomBody(SIZE);
-  const srv = await slowHeadServer(body, 400 * 1024);
+  const srv = await slowHeadServer(body, 800 * 1024);
   const dir = tmpDir();
   const m = new DownloadManager({ settings: { dir, connections: 4 }, tickMs: 50 });
   m.start();
@@ -66,7 +68,7 @@ test('a freed connection takes half of the slowest segment, and the file stays i
     const snap = m.list().find((t) => t.id === id);
     assert.equal(snap.status, 'completed', snap.error ?? '');
     assert.ok(snap.segments.length > 4, `segments were re-split (got ${snap.segments.length})`);
-    // Without re-splitting the slow first segment alone needs 2 MiB / 400 KiB/s = 5 s.
+    // Without re-splitting the slow first segment alone needs 4 MiB / 800 KiB/s = 5 s.
     assert.ok(Date.now() - t0 < 4200, `finished in ${Date.now() - t0} ms`);
     assert.ok(fs.readFileSync(path.join(dir, snap.filename)).equals(body));
     // segments tile the file exactly: no gap, no overlap

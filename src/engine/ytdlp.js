@@ -124,6 +124,34 @@ function explain(msg) {
   return null;
 }
 
+/**
+ * Folds one "DMP done total estimate fragIndex fragCount" line of yt-dlp into the task state (`ytd`, `frag`,
+ * `size`) and returns the bytes gained since the previous line, for the speed. `first` marks the first line
+ * of a run: it counts what an earlier run left on disk, which is not speed.
+ */
+function applyProgress(s, line, first = false) {
+  const [, done, total, est, fragIndex, fragCount] = line.split(' ');
+  const y = s.ytd;
+  const cur = Number(done) || 0;
+  // Next stream (audio after video) restarts near zero: keep what the finished one really weighed.
+  // Parallel fragments make the figure wobble by a few KB, so only a real fall counts as a new stream.
+  if (cur < y.cur * 0.5) y.base += y.cur;
+  const gained = cur > y.cur && !first ? cur - y.cur : 0;
+  y.cur = cur;
+  const fi = Number(fragIndex);
+  const fc = Number(fragCount);
+  // Fragment tally for the details pane: the index wobbles with parallel fragments, so it only grows within a stream.
+  s.frag = fc > 0 ? { done: Math.min(fc, Math.max(fi || 0, s.frag?.total === fc ? s.frag.done : 0)), total: fc } : (s.frag ?? null);
+  // Fragmented streams (most of YouTube) give no byte total: extrapolate from the fragments done. With
+  // parallel fragments the index lags far behind the bytes at the start, so wait for a few fragments
+  // before trusting the ratio (otherwise the total explodes to terabytes).
+  const byFragments = fi >= Math.max(5, fc * 0.03) && fc >= fi ? Math.round((cur * fc) / fi) : 0;
+  y.total = Number(total) || Number(est) || byFragments;
+  const downloaded = y.base + y.cur;
+  s.size = y.total ? Math.max(y.base + y.total, downloaded) : 0; // unknown until a trustworthy estimate exists
+  return gained;
+}
+
 /** The newest finished file in `dir` written since `since` whose name holds "[id].", or null. */
 function findByVideoId(dir, id, since) {
   if (!id) return null;
@@ -200,26 +228,9 @@ class YtdlpDownload extends Download {
     let buf = '';
     const onLine = (line) => {
       if (line.startsWith('DMP ')) {
-
-        const [, done, total, est, fragIndex, fragCount] = line.split(' ');
-        const y = s.ytd;
-        const cur = Number(done) || 0;
-        // Next stream (audio after video) restarts near zero: keep what the finished one really weighed.
-        // Parallel fragments make the figure wobble by a few KB, so only a real fall counts as a new stream.
-        if (cur < y.cur * 0.5) y.base += y.cur;
-        if (cur > y.cur && !firstReport) this.samples.push([Date.now(), cur - y.cur]); // the first figure includes a resumed part: not speed
+        const gained = applyProgress(s, line, firstReport);
         firstReport = false;
-        y.cur = cur;
-        // Fragmented streams (most of YouTube) give no byte total: extrapolate from the fragments done.
-        const fi = Number(fragIndex);
-        const fc = Number(fragCount);
-        // With parallel fragments the index lags far behind the bytes at the start, so wait for a few
-        // fragments before trusting the ratio (otherwise the total explodes to terabytes).
-        // Fragment tally for the details pane: the index wobbles with parallel fragments, so only let it grow within a stream.
-        s.frag = fc > 0 ? { done: Math.min(fc, Math.max(fi || 0, s.frag?.total === fc ? s.frag.done : 0)), total: fc } : s.frag ?? null;
-        const byFragments =fi >= Math.max(5, fc * 0.03) && fc >= fi ? Math.round((cur * fc) / fi) : 0;
-        y.total = Number(total) || Number(est) || byFragments;
-        s.size = y.total ? Math.max(y.base + y.total, this.downloaded()) : 0; // unknown until a trustworthy estimate exists
+        if (gained > 0) this.samples.push([Date.now(), gained]);
       } else if (line.startsWith('DMT ')) {
         s.filename = sanitizeFilename(line.slice(4).trim() || 'video') + (s.ytOpts?.audioOnly ? (this.ctx.ffmpeg?.() ? '.mp3' : '.m4a') : '.mp4');
       } else if (line.startsWith('DMF ')) {
@@ -278,4 +289,4 @@ class YtdlpDownload extends Download {
   }
 }
 
-module.exports = { YtdlpDownload, isVideoPage, isPlaylistUrl, listPlaylist, probeVideo, summarizeProbe, formatArgs, cleanYtOpts };
+module.exports = { YtdlpDownload, applyProgress, isVideoPage, isPlaylistUrl, listPlaylist, probeVideo, summarizeProbe, formatArgs, cleanYtOpts };
