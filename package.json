@@ -9,6 +9,7 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
+    "lint": "eslint .",
     "test": "node --test \"test/*.test.js\"",
     "icon": "node tools/make-icon.js",
     "dist": "electron-builder --win nsis --x64 --publish never",
@@ -18,8 +19,11 @@
     "node": ">=20"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "electron": "^45.1.0",
-    "electron-builder": "^26.18.0"
+    "electron-builder": "^26.18.0",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0"
   },
   "build": {
     "appId": "local.downloadmanager.app",
@@ -70,5 +74,8 @@
       "uninstallerIcon": "build/icon.ico",
       "artifactName": "Tachy-Download-Setup-${version}.${ext}"
     }
+  },
+  "dependencies": {
+    "undici": "^7.30.1"
   }
 }

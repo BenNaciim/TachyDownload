@@ -6,8 +6,11 @@ const crypto = require('node:crypto');
 const { EventEmitter } = require('node:events');
 const { Download } = require('./download');
 const { HlsDownload } = require('./hls');
-const { YtdlpDownload, isVideoPage, isPlaylistUrl, listPlaylist, cleanYtOpts } = require('./ytdlp');
+const { YtdlpDownload, isVideoPage, listPlaylist, cleanYtOpts } = require('./ytdlp');
 const { TokenBucket } = require('./tokenBucket');
+const { normalizeProxy, makeFetch } = require('./net');
+const { parseRules, folderFor } = require('./rules');
+const { findDuplicate, isArchive, extractArchive, systemTar } = require('./postprocess');
 const { sanitizeFilename, filenameFromUrl, categoryFor } = require('./util');
 
 const DEFAULT_SETTINGS = {
@@ -18,6 +21,13 @@ const DEFAULT_SETTINGS = {
   videoMaxHeight: 1080,
   convertToMp4: true,
   categories: false,
+  autoRetry: true,
+  adaptive: true,
+  proxy: '',
+  speedSchedule: { enabled: false, from: '08:00', to: '18:00', limitKBps: 500 },
+  rules: '',
+  duplicates: true,
+  autoExtract: false,
   autoStart: false,
   closeToTray: true,
   notifications: true,
@@ -26,6 +36,14 @@ const DEFAULT_SETTINGS = {
   ytCookies: '',
   afterAll: 'none',
   schedule: { enabled: false, from: '01:00', to: '07:00' },
+};
+
+const safeProxy = (v) => {
+  try {
+    return normalizeProxy(v);
+  } catch {
+    return '';
+  }
 };
 
 const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, Math.round(Number(n)) || lo));
@@ -61,13 +79,24 @@ function validateUrl(url) {
   return u.toString();
 }
 
+/** Waits before each automatic retry of a download that lost its connection, in seconds. */
+const RETRY_DELAYS = [15, 30, 60, 120, 300, 600];
+
 class DownloadManager extends EventEmitter {
-  constructor({ storePath, settings = {}, tickMs = 1000, tools = null } = {}) {
+  constructor({ storePath, settings = {}, tickMs = 1000, tools = null, retryDelays = RETRY_DELAYS, siteAuth = null, tar = undefined } = {}) {
     super();
+    this.retryDelays = retryDelays;
+    this.siteAuth = siteAuth; // (url) => extra request headers for that site, or null
+    this.tar = tar ?? systemTar();
     this.tools = tools ?? { find: () => null };
     this.storePath = storePath;
     this.settings = this._normalize({ ...DEFAULT_SETTINGS, ...settings });
-    this.limiter = new TokenBucket(this.settings.speedLimitKBps * 1024);
+    this.limiter = new TokenBucket(0);
+    this._appliedLimit = -1;
+    this._syncLimit();
+    this.fetch = fetch;
+    this._proxyInUse = '';
+    this._applyNet();
     this.tasks = new Map();
     this.saveTimer = null;
     this.tickMs = tickMs;
@@ -83,6 +112,18 @@ class DownloadManager extends EventEmitter {
       videoMaxHeight: [360, 480, 720, 1080, 1440, 2160].includes(Number(s.videoMaxHeight)) ? Number(s.videoMaxHeight) : 1080,
       convertToMp4: s.convertToMp4 !== false,
       categories: Boolean(s.categories),
+      autoRetry: s.autoRetry !== false,
+      adaptive: s.adaptive !== false,
+      proxy: safeProxy(s.proxy),
+      speedSchedule: {
+        enabled: Boolean(s.speedSchedule?.enabled),
+        from: toMinutes(s.speedSchedule?.from) === null ? '08:00' : s.speedSchedule.from,
+        to: toMinutes(s.speedSchedule?.to) === null ? '18:00' : s.speedSchedule.to,
+        limitKBps: Math.max(0, Math.round(Number(s.speedSchedule?.limitKBps) || 0)),
+      },
+      rules: String(s.rules ?? '').slice(0, 4000),
+      duplicates: s.duplicates !== false,
+      autoExtract: Boolean(s.autoExtract),
       autoStart: Boolean(s.autoStart),
       closeToTray: s.closeToTray !== false,
       notifications: s.notifications !== false,
@@ -98,6 +139,38 @@ class DownloadManager extends EventEmitter {
     };
   }
 
+  /** The limit in force now: the fixed one, tightened by the time-of-day one while its window is open. */
+  effectiveLimit(date = new Date()) {
+    const { speedLimitKBps, speedSchedule: sch } = this.settings;
+    const caps = [speedLimitKBps];
+    if (sch.enabled && sch.limitKBps > 0 && inWindow({ enabled: true, from: sch.from, to: sch.to }, date)) caps.push(sch.limitKBps);
+    const set = caps.filter((v) => v > 0);
+    return set.length ? Math.min(...set) : 0;
+  }
+
+  /** Pushes the limit in force to the shared bucket, only when it changed (setting a rate refills the bucket). */
+  _syncLimit() {
+    const kbps = this.effectiveLimit();
+    if (kbps === this._appliedLimit) return;
+    this._appliedLimit = kbps;
+    this.limiter.setRate(kbps * 1024);
+  }
+
+  /** Downloads go through the proxy when one is set. */
+  _applyNet() {
+    if (this.settings.proxy === this._proxyInUse && this.fetch) return;
+    this._proxyInUse = this.settings.proxy;
+    this.fetch = makeFetch(this.settings.proxy);
+  }
+
+  _rulesList() {
+    if (this._rulesText !== this.settings.rules) {
+      this._rulesText = this.settings.rules;
+      this._rulesParsed = parseRules(this._rulesText);
+    }
+    return this._rulesParsed;
+  }
+
   load() {
     if (!this.storePath || !fs.existsSync(this.storePath)) return;
     let data;
@@ -108,7 +181,8 @@ class DownloadManager extends EventEmitter {
     }
     if (data.settings) {
       this.settings = this._normalize({ ...this.settings, ...data.settings });
-      this.limiter.setRate(this.settings.speedLimitKBps * 1024);
+      this._syncLimit();
+      this._applyNet();
     }
     for (const state of data.tasks ?? []) {
       // Anything that was in flight when the app closed waits for the user.
@@ -137,9 +211,13 @@ class DownloadManager extends EventEmitter {
       ytdlpPrefix: this.tools.ytdlpPrefix, // only set by tests, to run a stand-in script instead of yt-dlp.exe
       ffmpeg: () => this.tools.find('ffmpeg'),
       deno: () => this.tools.find('deno'),
-      settings: () => this.settings,
+      settings: () => ({ ...this.settings, speedLimitKBps: this.effectiveLimit() }),
+      fetch: (url, init) => this.fetch(url, init),
+      siteAuth: (url) => this.siteAuth?.(url) ?? null,
       diagFile: () => (this.storePath ? path.join(path.dirname(this.storePath), 'ytdlp-last.log') : null),
       finalDir: (name, dir) => {
+        const ruled = state.ownFolder ? null : folderFor(this._rulesList(), { filename: name, url: state.url, pageUrl: state.pageUrl }, dir);
+        if (ruled) return ruled;
         const folder = this.settings.categories && !state.ownFolder ? categoryFor(name) : null;
         return folder ? path.join(dir, folder) : dir;
       },
@@ -151,7 +229,9 @@ class DownloadManager extends EventEmitter {
       this._scheduleSave();
     });
     task.on('settled', () => {
+      this._planRetry(task);
       this.pump();
+      this._afterComplete(task).catch(() => {});
     });
     this.tasks.set(state.id, task);
     return task;
@@ -217,7 +297,7 @@ class DownloadManager extends EventEmitter {
   async addPlaylist(url, opts = {}) {
     const ytdlp = this.tools.find('ytdlp');
     if (!ytdlp) throw new Error('Outils vidéo non installés : ouvrez Paramètres → Vidéos');
-    const { title, items } = await listPlaylist(ytdlp, validateUrl(url));
+    const { title, items } = await listPlaylist(ytdlp, validateUrl(url), { proxy: this.settings.proxy });
     if (items.length === 0) throw new Error('Cette playlist est vide ou privée');
     const dir = path.join(opts.dir || this.settings.dir, sanitizeFilename(title));
     return items.map((it) =>
@@ -288,6 +368,7 @@ class DownloadManager extends EventEmitter {
   pause(id) {
     const t = this._get(id);
     if (t.state.status === 'completed') return;
+    t.state.retryAt = null;
     return t.stop('paused');
   }
 
@@ -297,10 +378,27 @@ class DownloadManager extends EventEmitter {
       t.state.status = 'queued';
       t.state.error = null;
       t.state.startAt = null;
+      t.state.retryAt = null; // a manual restart starts the automatic attempts over
+      t.state.retryCount = 0;
       this.emit('update', t.snapshot());
       this._scheduleSave();
       this.pump();
     }
+  }
+
+  /** Own speed limit of one download, in KB/s (0 removes it). */
+  setTaskLimit(id, kbps) {
+    const t = this._get(id);
+    t.setLimit(kbps);
+    this._scheduleSave();
+    return t.snapshot();
+  }
+
+  /** Takes every finished download off the list (the files stay where they are). Returns how many. */
+  async clearCompleted() {
+    const ids = [...this.tasks.values()].filter((t) => t.state.status === 'completed').map((t) => t.id);
+    for (const id of ids) await this.remove(id);
+    return ids.length;
   }
 
   async remove(id, { deleteFile = false } = {}) {
@@ -319,19 +417,87 @@ class DownloadManager extends EventEmitter {
   }
 
   setSettings(patch) {
+    if (patch && 'proxy' in patch) normalizeProxy(patch.proxy); // throws on an address that cannot work
     const next = this._normalize({ ...this.settings, ...patch });
     this.settings = next;
-    this.limiter.setRate(next.speedLimitKBps * 1024);
+    this._syncLimit();
+    this._applyNet();
     this._scheduleSave();
     this.emit('settings', this.settings);
     this.tick();
     return this.settings;
   }
 
+  /** Once a download is finished: warn about a copy of a file already received, and unpack archives. */
+  async _afterComplete(t) {
+    const s = t.state;
+    if (s.status !== 'completed' || s.postDone) return;
+    s.postDone = true;
+    const file = path.join(s.dir, s.filename);
+    if (!fs.existsSync(file)) return;
+    const touch = () => {
+      this.emit('update', t.snapshot());
+      this._scheduleSave();
+    };
+    if (this.settings.duplicates) {
+      const others = [...this.tasks.values()]
+        .filter((o) => o !== t && o.state.status === 'completed')
+        .map((o) => path.join(o.state.dir, o.state.filename));
+      const twin = await findDuplicate(file, others).catch(() => null);
+      if (twin) {
+        s.duplicateOf = twin;
+        touch();
+      }
+    }
+    if (this.settings.autoExtract && isArchive(s.filename)) {
+      s.extracting = true;
+      touch();
+      try {
+        s.extractedTo = await extractArchive(file, { tar: this.tar });
+      } catch (err) {
+        s.extractError = err.message;
+      } finally {
+        s.extracting = false;
+        touch();
+      }
+    }
+  }
+
+  /**
+   * A download that failed on a dropped connection tries again by itself, a little later each time. The
+   * count starts over when it made headway since the last attempt, so a long download on a bad line keeps going.
+   */
+  _planRetry(t) {
+    const s = t.state;
+    if (s.status !== 'error' || !s.retryable || s.needsRefresh || !this.settings.autoRetry) {
+      s.retryAt = null;
+      return;
+    }
+    const got = t.downloaded();
+    if (got > (s.retryBytes ?? -1)) s.retryCount = 0;
+    s.retryBytes = got;
+    const n = s.retryCount ?? 0;
+    if (n >= this.retryDelays.length) {
+      s.retryAt = null;
+      return;
+    }
+    s.retryCount = n + 1;
+    s.retryAt = Date.now() + this.retryDelays[n] * 1000;
+    this.emit('update', t.snapshot());
+    this._scheduleSave();
+  }
+
   tick() {
+    this._syncLimit();
     const now = Date.now();
     for (const t of this.tasks.values()) {
       const s = t.state;
+      if (s.status === 'error' && s.retryAt && s.retryAt <= now && inWindow(this.settings.schedule)) {
+        s.retryAt = null;
+        s.status = 'queued';
+        s.error = null;
+        this.emit('update', t.snapshot());
+      }
       if (s.status === 'scheduled' && s.startAt && s.startAt <= now) {
         s.status = 'queued';
         this.emit('update', t.snapshot());

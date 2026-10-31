@@ -19,11 +19,11 @@ const isVideoPage = (url) => VIDEO_PAGE.some((re) => re.test(url));
 const isPlaylistUrl = (url) => /^https?:\/\/(www\.|m\.|music\.)?youtube\.com\/playlist\?(.*&)?list=[\w-]+/i.test(url);
 
 /** Lists a playlist without downloading it: [{ url, title }] plus the playlist's own title. */
-function listPlaylist(ytdlp, url, limit = 200) {
+function listPlaylist(ytdlp, url, { limit = 200, proxy = '' } = {}) {
   return new Promise((resolve, reject) => {
     execFile(
       ytdlp,
-      ['--flat-playlist', '--no-warnings', '--playlist-end', String(limit), '--print', '%(playlist_title)s\t%(url)s\t%(title)s', url],
+      ['--flat-playlist', '--no-warnings', ...(proxy ? ['--proxy', proxy] : []), '--playlist-end', String(limit), '--print', '%(playlist_title)s\t%(url)s\t%(title)s', url],
       { windowsHide: true, timeout: 90_000, maxBuffer: 16 * 1024 * 1024, encoding: 'utf8' },
       (err, stdout, stderr) => {
         if (err) return reject(new Error(String(stderr || err.message).split(/\r?\n/).find((l) => l.trim())?.replace(/^ERROR:\s*(\[[^\]]+\]\s*)?/i, '') || 'Playlist illisible'));
@@ -65,11 +65,12 @@ function formatArgs({ opts, maxHeight, ffmpeg }) {
 }
 
 /** Looks at a video without downloading it: title, available heights and audio languages. */
-function probeVideo(ytdlp, url, { deno, cookies } = {}) {
+function probeVideo(ytdlp, url, { deno, cookies, proxy } = {}) {
   return new Promise((resolve, reject) => {
     const args = ['-J', '--no-playlist', '--no-warnings', '--encoding', 'utf-8'];
     if (deno) args.push('--js-runtimes', `deno:${deno}`);
     if (cookies) args.push('--cookies-from-browser', cookies);
+    if (proxy) args.push('--proxy', proxy);
     args.push(url);
     execFile(ytdlp, args, { windowsHide: true, timeout: 60_000, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8' }, (err, stdout, stderr) => {
       if (err) {
@@ -214,8 +215,11 @@ class YtdlpDownload extends Download {
     // Without a JS engine YouTube hides the H.264 formats and may hide all of them.
     const deno = this.ctx.deno?.();
     if (deno) args.push('--js-runtimes', `deno:${deno}`);
+    if (cfg.proxy) args.push('--proxy', cfg.proxy);
     if (cfg.ytCookies) args.push('--cookies-from-browser', cfg.ytCookies); // a signed-in browser passes YouTube's bot check
-    if (cfg.speedLimitKBps > 0) args.push('--limit-rate', `${cfg.speedLimitKBps}K`);
+    // The lower of the shared limit and this video's own limit (yt-dlp reads it at start: a change applies on resume).
+    const caps = [cfg.speedLimitKBps, s.speedLimitKBps].filter((v) => v > 0);
+    if (caps.length) args.push('--limit-rate', `${Math.min(...caps)}K`);
     args.push(s.url);
     return args;
   }
@@ -306,7 +310,9 @@ class YtdlpDownload extends Download {
       const detail = lastErr || tail.join(' · ');
       const message = explain(detail) || detail || `yt-dlp n’a pas pu télécharger cette vidéo (code ${code})`;
       writeDiag(message);
-      throw new FatalError(message);
+      const failure = new FatalError(message);
+      failure.retryable = /getaddrinfo|timed out|network is unreachable|connection (reset|aborted|refused)|http error 5\d\d/i.test(detail);
+      throw failure;
     }
     writeDiag('');
     // yt-dlp already wrote it in place: only a move to another folder needs a free name.

@@ -10,8 +10,8 @@ const {
  * Asks the server for the first byte only. A 206 answer proves range support and
  * gives the total size in Content-Range; a plain 200 means a single stream.
  */
-async function probe(url, headers = {}, signal) {
-  const res = await fetch(url, {
+async function probe(url, headers = {}, signal, fetchFn = fetch) {
+  const res = await fetchFn(url, {
     headers: { ...headers, Range: 'bytes=0-0' },
     redirect: 'follow',
     signal,
@@ -21,6 +21,7 @@ async function probe(url, headers = {}, signal) {
       const err = new Error(`Le serveur a répondu ${res.status}`);
       err.fatal = true;
       err.expired = res.status === 401 || res.status === 403 || res.status === 410;
+      err.status = res.status;
       throw err;
     }
     let size = null;

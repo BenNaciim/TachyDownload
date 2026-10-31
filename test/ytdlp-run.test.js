@@ -12,7 +12,7 @@ const URL = 'https://www.youtube.com/watch?v=abcdefghijk';
 const FAKE = path.join(__dirname, 'fake-ytdlp.js');
 
 /** Runs one video through the real engine with the stand-in yt-dlp and returns what happened. */
-async function run(mode, settings = {}) {
+async function run(mode, settings = {}, taskLimit = 0) {
   const dir = tmpDir();
   const dataDir = tmpDir();
   const argsFile = path.join(dataDir, 'args.json');
@@ -22,7 +22,11 @@ async function run(mode, settings = {}) {
   const m = new DownloadManager({ storePath: path.join(dataDir, 'downloads.json'), settings: { dir, ...settings }, tickMs: 50, tools });
   m.start();
   try {
-    m.add(URL, { kind: 'ytdlp' });
+    const { id } = m.add(URL, { kind: 'ytdlp', paused: Boolean(taskLimit) });
+    if (taskLimit) {
+      m.setTaskLimit(id, taskLimit);
+      m.resume(id);
+    }
     await waitFor(() => ['completed', 'error'].includes(m.list()[0].status), 20000);
     const diag = path.join(dataDir, 'ytdlp-last.log');
     return {
@@ -76,6 +80,14 @@ test('with type folders on, the video lands in its folder', async () => {
   const r = await run('ok', { categories: true });
   assert.equal(r.task.status, 'completed', r.task.error);
   assert.ok(fs.existsSync(path.join(r.dir, 'Vidéos', 'Episode [abcdefghijk].mp4')));
+});
+
+test('the lower of the shared and the own speed limit goes to yt-dlp', async () => {
+  const r = await run('ok', { speedLimitKBps: 500 }, 200);
+  assert.equal(r.task.status, 'completed', r.task.error);
+  assert.equal(r.args[r.args.indexOf('--limit-rate') + 1], '200K');
+  const s = await run('ok', { speedLimitKBps: 100 }, 400);
+  assert.equal(s.args[s.args.indexOf('--limit-rate') + 1], '100K');
 });
 
 test('formatDiag lists what was run and how it ended', () => {

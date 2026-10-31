@@ -214,7 +214,6 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   background: var(--aurora); -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 #hero-unit { font-size: 16px; color: var(--ink-2); }
-.hero-chips { display: none; }
 .hero-graph svg { width: 100%; height: 84px; display: block; color: var(--data); }
 #g-area { fill: var(--data); opacity: 0.17; }
 #g-line { fill: none; stroke: var(--data); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
@@ -238,12 +237,25 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 }
 .rows[hidden] { display: none; }
 .row {
-  display: grid; grid-template-columns: 36px minmax(0, 1fr) auto auto auto; align-items: center; gap: 12px;
+  display: grid; grid-template-columns: 18px 36px minmax(0, 1fr) auto auto auto; align-items: center; gap: 12px;
   padding: 9px 18px; border: 0; border-top: 1px solid var(--line); border-radius: 0; cursor: pointer;
 }
 .row:first-child { border-top: 0; }
+.r-check { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--accent); opacity: 0; }
+.row:hover .r-check, .row:focus-within .r-check, .rows.picking .r-check, .r-check:checked { opacity: 1; }
+.row.checked { background: var(--accent-soft); }
+
+/* group actions on the ticked rows */
+.bulk {
+  flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 10px; padding: 6px 12px;
+  background: var(--accent-soft); border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px;
+}
+.bulk span { font-weight: 600; margin-right: auto; }
+.bulk button { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-weight: 500; }
+.bulk button:hover { border-color: var(--accent); color: var(--accent); }
+.bulk button.danger:hover { border-color: var(--err); color: var(--err); }
 .row:hover, .row.selected { background: var(--accent-soft); }
-.row.downloading { grid-template-columns: 36px minmax(0, 1fr) auto auto auto auto; }
+.row.downloading { grid-template-columns: 18px 36px minmax(0, 1fr) auto auto auto auto; }
 .row[hidden] { display: none; }
 
 .tile {
@@ -362,13 +374,18 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .segmap > div.done i { background: var(--ok); }
 
 .info { margin: 0; display: grid; grid-template-columns: 78px 1fr; gap: 6px 10px; font-size: 12.5px; }
+.d-limit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; font-size: 12.5px; color: var(--ink-2); }
+.d-limit input { width: 90px; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 5px 8px; }
+.d-limit button { background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 5px 12px; font-weight: 500; }
+.d-limit button:hover { border-color: var(--accent); color: var(--accent); }
+.d-limit small { flex-basis: 100%; }
 .info dt { color: var(--ink-2); }
 .info dd { margin: 0; overflow-wrap: anywhere; }
 .d-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; padding-bottom: 8px; }
-.d-actions button, dialog .actions button, .row2 button {
+.d-actions button, dialog .actions button, .row2 button, .login-list button {
   background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 7px 14px; font-weight: 500;
 }
-.d-actions button:hover, dialog .actions button:hover, .row2 button:hover { border-color: var(--accent); color: var(--accent); }
+.d-actions button:hover, dialog .actions button:hover, .row2 button:hover, .login-list button:hover { border-color: var(--accent); color: var(--accent); }
 button.primary { background: var(--accent) !important; color: var(--accent-ink) !important; border-color: var(--accent) !important; font-weight: 600; }
 button.primary:hover { filter: brightness(1.07); }
 .d-actions button.danger:hover { border-color: var(--err); color: var(--err); }
@@ -389,6 +406,15 @@ dialog input, dialog textarea, dialog select {
 }
 dialog input[type="checkbox"] { width: auto; margin: 0; }
 dialog textarea { resize: vertical; }
+code { font-family: ui-monospace, Consolas, monospace; font-size: 0.92em; background: var(--accent-soft); border-radius: 5px; padding: 0 4px; }
+
+/* saved site logins in the settings */
+.login-list { list-style: none; margin: 0 0 8px; padding: 0; }
+.login-list:empty { display: none; }
+.login-list li { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.login-list li > :first-child { font-weight: 600; }
+.login-list li .muted { margin-right: auto; }
+.login-list li button { padding: 3px 10px; }
 fieldset { border: 1px solid var(--line); border-radius: 12px; margin: 0 0 10px; padding: 4px 12px 0; }
 legend { font-size: 12px; color: var(--ink-2); padding: 0 6px; font-weight: 600; }
 .row2 { display: flex; gap: 8px; }
@@ -520,8 +546,8 @@ dialog .range input[type="range"] { width: 190px; margin: 0; padding: 0; backgro
 .glass dialog input, .glass dialog textarea, .glass dialog select { background: rgba(255, 255, 255, 0.5); border-radius: 12px; }
 .glass[data-theme="dark"] dialog input, .glass[data-theme="dark"] dialog textarea, .glass[data-theme="dark"] dialog select { background: rgba(255, 255, 255, 0.08); }
 .glass[data-theme="dark"] dialog .range input[type="range"] { background: none; }
-.glass .d-actions button, .glass dialog .actions button, .glass .row2 button { background: rgba(255, 255, 255, 0.5); border-radius: 999px; }
-.glass[data-theme="dark"] .d-actions button, .glass[data-theme="dark"] dialog .actions button, .glass[data-theme="dark"] .row2 button { background: rgba(255, 255, 255, 0.1); }
+.glass .d-actions button, .glass dialog .actions button, .glass .row2 button, .glass .login-list button { background: rgba(255, 255, 255, 0.5); border-radius: 999px; }
+.glass[data-theme="dark"] .d-actions button, .glass[data-theme="dark"] dialog .actions button, .glass[data-theme="dark"] .row2 button, .glass[data-theme="dark"] .login-list button { background: rgba(255, 255, 255, 0.1); }
 .glass .dlg-head, .glass dialog .actions {
   background: rgba(255, 255, 255, 0.78); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);
 }
@@ -539,7 +565,7 @@ dialog .range input[type="range"] { width: 190px; margin: 0; padding: 0; backgro
 @media (max-width: 1000px) {
   .d-cols { grid-template-columns: 1fr; }
   .row.downloading .r-spark { display: none; }
-  .row.downloading { grid-template-columns: 36px minmax(0, 1fr) auto auto auto; }
+  .row.downloading { grid-template-columns: 18px 36px minmax(0, 1fr) auto auto auto; }
 }
 @media (max-width: 860px) {
   .app { grid-template-columns: 70px minmax(0, 1fr); }

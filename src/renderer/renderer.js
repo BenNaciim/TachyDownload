@@ -8,6 +8,7 @@ let appState = null;
 let selectedId = null;
 let currentFilter = 'all';
 let searchText = '';
+const checked = new Set(); // ids ticked for a group action
 
 /* icons: see icons.js, number and time formatting: see format.js */
 
@@ -180,8 +181,7 @@ function refreshList() {
     ? 'Collez un lien avec « Ajouter », ou laissez l’extension du navigateur vous envoyer vos téléchargements.'
     : 'Aucun téléchargement ne correspond à ce filtre ou à cette recherche.';
   $('empty-add').hidden = !noTasks;
-  $('chip-active').textContent = `${counts.active} actif${counts.active > 1 ? 's' : ''}`;
-  $('chip-waiting').textContent = `${counts.waiting} en attente`;
+  refreshBulk();
 }
 
 document.querySelectorAll('.nav-item[data-filter]').forEach((btn) =>
@@ -214,6 +214,50 @@ $('search').addEventListener('input', (e) => {
   refreshList();
 });
 
+/* ---------- group actions on ticked rows ---------- */
+const ticked = () => [...checked].filter((id) => tasks.has(id) && !tasks.get(id).tr.hidden);
+function refreshBulk() {
+  for (const id of [...checked]) if (!tasks.has(id)) checked.delete(id);
+  const n = ticked().length;
+  $('bulk').hidden = n === 0;
+  rowsEl.classList.toggle('picking', n > 0);
+  $('bulk-count').textContent = `${n} sélectionné${n > 1 ? 's' : ''}`;
+}
+function clearTicks() {
+  checked.clear();
+  for (const e of tasks.values()) {
+    e.refs.check.checked = false;
+    e.tr.classList.remove('checked');
+  }
+  refreshBulk();
+}
+async function removeTicked(deleteFiles) {
+  const ids = ticked();
+  if (ids.length === 0) return;
+  const unfinished = ids.filter((id) => tasks.get(id).snap.status !== 'completed').length;
+  if (deleteFiles) {
+    if (!confirm(`Supprimer ${ids.length} fichier${ids.length > 1 ? 's' : ''} du disque ?`)) return;
+  } else if (unfinished && !confirm(`${unfinished} téléchargement${unfinished > 1 ? 's' : ''} non terminé${unfinished > 1 ? 's' : ''} : les données déjà reçues seront supprimées. Continuer ?`)) {
+    return;
+  }
+  const results = await Promise.allSettled(ids.map((id) => window.dm.remove(id, deleteFiles || tasks.get(id).snap.status !== 'completed')));
+  const failed = results.filter((x) => x.status === 'rejected').length;
+  if (failed) alert(`${failed} élément${failed > 1 ? 's' : ''} n’${failed > 1 ? 'ont' : 'a'} pas pu être retiré${failed > 1 ? 's' : ''}.`);
+}
+$('bulk-remove').addEventListener('click', () => removeTicked(false));
+$('bulk-delete').addEventListener('click', () => removeTicked(true));
+$('bulk-clear').addEventListener('click', clearTicks);
+$('bulk-all').addEventListener('click', () => {
+  for (const [id, e] of tasks) {
+    if (!e.tr.hidden) {
+      checked.add(id);
+      e.refs.check.checked = true;
+      e.tr.classList.add('checked');
+    }
+  }
+  refreshBulk();
+});
+
 /* ---------- rows ---------- */
 const SPARK_W = 190;
 const SPARK_H = 36;
@@ -244,7 +288,15 @@ function buildRow(id) {
   const sparkHead = svgEl('circle', { class: 'sp-head', r: 2.6 });
   spark.append(svgEl('line', { class: 'sp-base', x1: 0, y1: SPARK_H - 4, x2: SPARK_W, y2: SPARK_H - 4 }), sparkArea, sparkLine, sparkRing, sparkHead);
   const actions = el('div', { className: 'r-actions' });
-  const tr = el('div', { className: 'row', tabIndex: 0 }, tile, el('div', { style: 'min-width:0' }, name, sub, bar), spark, pct, right, actions);
+  const check = el('input', { type: 'checkbox', className: 'r-check' });
+  check.setAttribute('aria-label', 'Sélectionner ce téléchargement');
+  check.addEventListener('click', (e) => e.stopPropagation());
+  check.addEventListener('change', () => {
+    if (check.checked) checked.add(id);
+    else checked.delete(id);
+    refreshList();
+  });
+  const tr = el('div', { className: 'row', tabIndex: 0 }, check, tile, el('div', { style: 'min-width:0' }, name, sub, bar), spark, pct, right, actions);
   tr.setAttribute('role', 'listitem');
   tr.addEventListener('click', () => select(id));
   tr.addEventListener('keydown', (e) => {
@@ -253,7 +305,7 @@ function buildRow(id) {
       select(id);
     }
   });
-  return { tr, refs: { tile, name, sub, barFill, pill, speed, speedNum, speedUnit, pct, eta, actions, sparkArea, sparkLine, sparkRing, sparkHead, hist: new Array(60).fill(0), state: '' } };
+  return { tr, refs: { check, tile, name, sub, barFill, pill, speed, speedNum, speedUnit, pct, eta, actions, sparkArea, sparkLine, sparkRing, sparkHead, hist: new Array(60).fill(0), state: '' } };
 }
 
 function subline(s) {
@@ -265,13 +317,25 @@ function subline(s) {
       return s.size ? `${pct} % · ${fmtBytes(s.downloaded)} sur ${fmtBytes(s.size)}` : `${fmtBytes(s.downloaded)} reçus`;
     case 'paused':
       return pct === null ? 'En pause' : `En pause à ${pct} % · ${fmtBytes(s.downloaded)} sur ${fmtBytes(s.size)}`;
-    case 'completed':
-      return `${s.size ? fmtBytes(s.size) : fmtBytes(s.downloaded)} · terminé ${s.completedAt ? fmtDate(s.completedAt) : ''}`.trim();
+    case 'completed': {
+      const base = `${s.size ? fmtBytes(s.size) : fmtBytes(s.downloaded)} · terminé ${s.completedAt ? fmtDate(s.completedAt) : ''}`.trim();
+      const folder = (p) => p.split(/[\\/]/).pop();
+      const notes = [];
+      if (s.extracting) notes.push('décompression…');
+      else if (s.extractedTo) notes.push(`décompressé dans « ${folder(s.extractedTo)} »`);
+      else if (s.extractError) notes.push('décompression impossible');
+      if (s.duplicateOf) notes.push(`identique à « ${folder(s.duplicateOf)} »`);
+      return notes.length ? `${base} · ${notes.join(' · ')}` : base;
+    }
     case 'error':
       if (s.needsRefresh) {
         return s.autoRefresh
           ? 'Lien expiré · l’extension cherche une nouvelle adresse…'
           : 'Lien expiré · ouvrez la page et relancez le téléchargement';
+      }
+      if (s.retryAt) {
+        const wait = Math.max(0, Math.ceil((s.retryAt - Date.now()) / 1000));
+        return `${s.error} · nouvelle tentative dans ${fmtEta(wait)}`;
       }
       return s.error || 'Le téléchargement a échoué';
     case 'scheduled':
@@ -301,7 +365,8 @@ function render(snap) {
   r.sub.textContent = subline(snap);
   r.sub.title = r.sub.textContent;
   r.barFill.style.width = `${barFraction(snap) * 100}%`;
-  entry.tr.className = `row ${snap.status}${snap.id === selectedId ? ' selected' : ''}`;
+  entry.tr.className = `row ${snap.status}${snap.id === selectedId ? ' selected' : ''}${checked.has(snap.id) ? ' checked' : ''}`;
+  r.check.checked = checked.has(snap.id);
 
   const running = snap.status === 'downloading';
   // Same reading as the total speed at the top: a big number and a small unit.
@@ -356,8 +421,6 @@ function drawHero(total) {
   $('hero-num').textContent = p.num;
   $('hero-unit').textContent = `${p.unit}/s`;
   $('hero-peak').textContent = peak > 0 ? `Pic : ${fmtSpeed(peak)} · 90 dernières secondes` : '90 dernières secondes';
-  const limit = appState?.settings?.speedLimitKBps ?? 0;
-  $('chip-limit').textContent = limit > 0 ? `Limite : ${fmtSpeed(limit * 1024)}` : 'Sans limite';
 }
 
 // Catmull-Rom spline through the samples, as cubic Béziers: a soft trace instead of a jagged one.
@@ -395,6 +458,10 @@ setInterval(() => {
   for (const { snap, refs } of tasks.values()) {
     const running = snap.status === 'downloading';
     if (running) total += snap.speed;
+    if (snap.status === 'error' && snap.retryAt) {
+      refs.sub.textContent = subline(snap); // the countdown to the next automatic attempt
+      refs.sub.title = refs.sub.textContent;
+    }
     if (running) {
       refs.hist.push(snap.speed);
       refs.hist.shift();
@@ -439,7 +506,14 @@ function closeDrawer() {
 }
 $('drawer-close').addEventListener('click', closeDrawer);
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && selectedId && !document.querySelector('dialog[open]')) closeDrawer();
+  if (document.querySelector('dialog[open]')) return;
+  if (e.key === 'Escape') {
+    if (checked.size) clearTicks();
+    else if (selectedId) closeDrawer();
+  } else if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName ?? '')) {
+    e.preventDefault();
+    $('bulk-all').click();
+  }
 });
 
 function infoRow(dl, label, value) {
@@ -528,9 +602,11 @@ function renderDrawer(s) {
     });
   }
 
-  const sig = `${s.status}|${s.filename}|${s.size}|${s.rangeOk}|${s.dir}|${segs.length}`;
+  const sig = `${s.status}|${s.filename}|${s.size}|${s.rangeOk}|${s.dir}|${segs.length}|${s.speedLimitKBps || 0}`;
   if (sig !== drawerSig) {
     drawerSig = sig;
+    $('d-limit').value = s.speedLimitKBps || '';
+    $('d-limit-note').textContent = s.kind === 'ytdlp' && s.status === 'downloading' ? 'Pour une vidéo, la limite s’applique à la reprise.' : '';
     const dl = $('d-info');
     dl.replaceChildren();
     infoRow(dl, 'Adresse', s.url);
@@ -565,6 +641,11 @@ function renderDrawer(s) {
     $('d-actions').replaceChildren(...acts);
   }
 }
+
+$('d-limit-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (selectedId) call(() => window.dm.setLimit(selectedId, Number($('d-limit').value) || 0));
+});
 
 /* ---------- add dialog ---------- */
 const dlgAdd = $('dlg-add');
@@ -622,6 +703,12 @@ const SETTING_FIELDS = [
   ['videoMaxHeight', 'set-height', 'number'],
   ['convertToMp4', 'set-mp4', 'bool'],
   ['categories', 'set-categories', 'bool'],
+  ['autoRetry', 'set-autoretry', 'bool'],
+  ['adaptive', 'set-adaptive', 'bool'],
+  ['proxy', 'set-proxy', 'text'],
+  ['rules', 'set-rules', 'text'],
+  ['duplicates', 'set-duplicates', 'bool'],
+  ['autoExtract', 'set-extract', 'bool'],
   ['closeToTray', 'set-tray', 'bool'],
   ['autoStart', 'set-autostart', 'bool'],
   ['notifications', 'set-notif', 'bool'],
@@ -639,12 +726,65 @@ function fillSettings() {
   $('set-sched-on').checked = s.schedule.enabled;
   $('set-sched-from').value = s.schedule.from;
   $('set-sched-to').value = s.schedule.to;
+  $('set-speedsched-on').checked = s.speedSchedule.enabled;
+  $('set-speedsched-from').value = s.speedSchedule.from;
+  $('set-speedsched-to').value = s.speedSchedule.to;
+  $('set-speedsched-limit').value = String(s.speedSchedule.limitKBps);
   syncAppearance();
+  window.dm.logins().then(drawLogins, () => {});
   $('update-status').textContent = `Version installée : ${appState.version || '–'}`;
   window.dm.toolsStatus().then(drawTools);
   $('info-port').textContent = appState.port || 'indisponible';
   $('info-token').value = appState.token;
 }
+/* ---------- site logins (saved at once, not with the settings form) ---------- */
+const LOGIN_TYPES = { basic: 'Identifiant et mot de passe', bearer: 'Jeton', cookie: 'Cookie' };
+function drawLogins(list) {
+  const ul = $('login-list');
+  ul.replaceChildren();
+  for (const l of list) {
+    const remove = el('button', { type: 'button', textContent: 'Retirer' });
+    remove.addEventListener('click', () =>
+      window.dm.removeLogin(l.host).then(drawLogins, (err) => {
+        $('login-error').textContent = String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      }),
+    );
+    ul.append(el('li', {}, el('span', { textContent: l.host }), el('span', { className: 'muted', textContent: l.user ? `${LOGIN_TYPES[l.type]} · ${l.user}` : LOGIN_TYPES[l.type] }), remove));
+  }
+}
+function syncLoginType() {
+  const type = $('login-type').value;
+  $('login-user-label').hidden = type !== 'basic';
+  $('login-secret-label').textContent = { basic: 'Mot de passe', bearer: 'Jeton', cookie: 'Cookie (nom=valeur; …)' }[type];
+}
+$('login-type').addEventListener('change', syncLoginType);
+syncLoginType();
+async function addLogin() {
+  $('login-error').textContent = '';
+  try {
+    drawLogins(
+      await window.dm.saveLogin({
+        host: $('login-host').value,
+        type: $('login-type').value,
+        user: $('login-user').value,
+        secret: $('login-secret').value,
+      }),
+    );
+    for (const id of ['login-host', 'login-user', 'login-secret']) $(id).value = '';
+  } catch (err) {
+    $('login-error').textContent = String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+  }
+}
+$('login-add').addEventListener('click', addLogin);
+// Enter in these fields adds the login instead of submitting the whole settings form.
+for (const id of ['login-host', 'login-user', 'login-secret']) {
+  $(id).addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    addLogin();
+  });
+}
+
 $('btn-settings').addEventListener('click', () => {
   $('set-error').textContent = '';
   fillSettings();
@@ -820,6 +960,12 @@ $('form-settings').addEventListener('submit', async (e) => {
         from: $('set-sched-from').value,
         to: $('set-sched-to').value,
       },
+      speedSchedule: {
+        enabled: $('set-speedsched-on').checked,
+        from: $('set-speedsched-from').value,
+        to: $('set-speedsched-to').value,
+        limitKBps: Number($('set-speedsched-limit').value) || 0,
+      },
     };
     for (const [key, id, type] of SETTING_FIELDS) {
       patch[key] = type === 'bool' ? $(id).checked : type === 'number' ? Number($(id).value) : $(id).value;
@@ -842,6 +988,17 @@ $('btn-resume-all').addEventListener('click', () => {
   for (const { snap } of tasks.values()) {
     if (snap.status === 'paused' || snap.status === 'error') call(() => window.dm.resume(snap.id));
   }
+});
+
+/* ---------- the window's menu bar ---------- */
+window.dm.onMenu(({ action, arg }) => {
+  if (document.querySelector('dialog[open]')) return;
+  if (action === 'add') $('btn-add').click();
+  else if (action === 'settings') $('btn-settings').click();
+  else if (action === 'search') {
+    $('search').focus();
+    $('search').select();
+  } else if (action === 'theme') document.querySelector(`#set-theme [data-v="${arg === 'dark' || arg === 'light' ? arg : 'auto'}"]`)?.click();
 });
 
 /* ---------- boot ---------- */

@@ -12,7 +12,11 @@ Built from scratch with Electron and Node.js on plain HTTP (`Range`, `Content-Ra
 - **Resume**: every segment's offset is saved. After a pause, a network drop or closing the app, only the missing bytes are requested again. If the remote file changed (`If-Range`), the download starts over.
 - **Servers without `Range`**: automatic fallback to a single stream (no resume possible).
 - **Queue**: configurable number of simultaneous downloads.
-- **Speed limit**: one global limit (KB/s) shared by all segments.
+- **Speed limit**: one global limit (KB/s) shared by all segments, an own limit per download (details panel), and a stricter limit during a chosen time of day (Settings → Network). The tightest one applies.
+- **Network**: an HTTP/HTTPS proxy (also used by yt-dlp), automatic retry after a network cut, and adaptive connections: when a server answers 429 or 503, the download uses fewer connections and takes them back once things calm down.
+- **After the download**: filing rules (`*.pdf = Documents`, `example.com = D:\Sites`), a warning when a file is identical to one already received, and optional unpacking of archives (`.zip`, `.7z`, `.tar*`) next to the archive with the `tar` that ships with Windows.
+- **Site logins**: user and password, bearer token or cookie kept per site (and its subdomains), encrypted with the Windows account and sent only to that site. Not used for videos through yt-dlp.
+- **Menu bar**: File, Downloads (pause/resume all, clear finished, speed limit, end-of-queue action), View (search, theme, zoom) and Help, with keyboard shortcuts. The taskbar button shows the overall progress.
 - **Scheduling**: start at a given date and time, plus a daily time window (may cross midnight) outside which downloads stop.
 - **Confirmation window** (like IDM): every download handed over by the browser opens a small window with the file name, size and destination folder (editable) and three choices: "Download now", "Later" (added paused) or "Cancel". It can be turned off in Settings → Sorting and startup.
 - **YouTube, Vimeo, Dailymotion, Twitch (replays)** through yt-dlp, ffmpeg and Deno (the JavaScript engine YouTube needs to offer H.264), downloaded at the end of the install (official GitHub releases, SHA-256 verified). yt-dlp updates itself, at most once a day. Maximum quality is configurable, H.264 + AAC preferred. The confirmation window probes the video and lets you pick the **quality** (2160p, 1080p, 720p…), the **audio language** when the video offers several, or **audio only** (MP3 with ffmpeg).

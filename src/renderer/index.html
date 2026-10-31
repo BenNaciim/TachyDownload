@@ -64,11 +64,6 @@
         <div class="hero-text">
           <div class="hero-label">Vitesse totale</div>
           <div class="hero-speed"><span id="hero-num">0</span><span id="hero-unit">Mo/s</span></div>
-          <div class="hero-chips">
-            <span id="chip-active">0 actif</span>
-            <span id="chip-waiting">0 en attente</span>
-            <span id="chip-limit">Sans limite</span>
-          </div>
         </div>
         <div class="hero-graph">
           <svg viewBox="0 0 360 80" preserveAspectRatio="none" role="img" aria-label="Courbe de vitesse des 90 dernières secondes">
@@ -82,6 +77,14 @@
       <div class="list-head">
         <h1 id="list-title">Tous les téléchargements</h1>
         <label class="search"><svg class="i" data-i="search"></svg><input id="search" type="search" placeholder="Rechercher" aria-label="Rechercher un téléchargement"></label>
+      </div>
+
+      <div id="bulk" class="bulk" role="toolbar" aria-label="Actions sur la sélection" hidden>
+        <span id="bulk-count" aria-live="polite"></span>
+        <button type="button" id="bulk-all">Tout sélectionner</button>
+        <button type="button" id="bulk-remove">Retirer de la liste</button>
+        <button type="button" id="bulk-delete" class="danger">Supprimer les fichiers</button>
+        <button type="button" id="bulk-clear">Annuler</button>
       </div>
 
       <div id="rows" class="rows" role="list"></div>
@@ -119,6 +122,13 @@
         <div class="d-col">
           <h3>Informations</h3>
           <dl class="info" id="d-info"></dl>
+          <form class="d-limit" id="d-limit-form">
+            <label for="d-limit">Limite de vitesse</label>
+            <input id="d-limit" type="number" min="0" step="50" placeholder="Aucune" aria-describedby="d-limit-note">
+            <span>Ko/s</span>
+            <button type="submit">Appliquer</button>
+            <small class="muted" id="d-limit-note"></small>
+          </form>
           <div class="d-actions" id="d-actions"></div>
         </div>
       </div>
@@ -170,6 +180,19 @@
         </div>
       </fieldset>
       <fieldset>
+        <legend>Réseau</legend>
+        <label>Proxy (http ou https, vide pour aucun)
+          <input id="set-proxy" type="text" placeholder="proxy.exemple.fr:3128" autocomplete="off" spellcheck="false">
+        </label>
+        <label class="inline"><input type="checkbox" id="set-adaptive"> Réduire le nombre de connexions quand un serveur en refuse trop</label>
+        <label class="inline"><input type="checkbox" id="set-speedsched-on"> Limiter la vitesse pendant une plage horaire</label>
+        <div class="grid">
+          <label>De <input type="time" id="set-speedsched-from"></label>
+          <label>À <input type="time" id="set-speedsched-to"></label>
+          <label>Limite en Ko/s <input type="number" id="set-speedsched-limit" min="0"></label>
+        </div>
+      </fieldset>
+      <fieldset>
         <legend>Vidéos</legend>
         <label>Qualité maximale
           <select id="set-height">
@@ -195,6 +218,7 @@
       <fieldset>
         <legend>Classement et démarrage</legend>
         <label class="inline"><input type="checkbox" id="set-categories"> Classer par type (Vidéos, Musique, Documents…)</label>
+        <label class="inline"><input type="checkbox" id="set-autoretry"> Reprendre automatiquement après une coupure réseau</label>
         <label class="inline"><input type="checkbox" id="set-tray"> Fermer la fenêtre réduit dans la zone de notification</label>
         <label class="inline"><input type="checkbox" id="set-autostart"> Lancer avec Windows</label>
         <label class="inline"><input type="checkbox" id="set-notif"> Notifier à la fin d’un téléchargement</label>
@@ -207,6 +231,35 @@
             <option value="shutdown">Éteindre l’ordinateur</option>
           </select>
         </label>
+      </fieldset>
+      <fieldset>
+        <legend>Après le téléchargement</legend>
+        <label>Règles de rangement, une par ligne : <code>*.pdf = Documents</code> ou <code>exemple.com = D:\Sites</code>
+          <textarea id="set-rules" rows="4" spellcheck="false" placeholder="*.pdf = Documents"></textarea>
+        </label>
+        <label class="inline"><input type="checkbox" id="set-duplicates"> Signaler un fichier identique à un fichier déjà reçu</label>
+        <label class="inline"><input type="checkbox" id="set-extract"> Décompresser les archives (.zip, .7z, .tar…) dans un dossier à côté</label>
+      </fieldset>
+      <fieldset>
+        <legend>Sites connectés</legend>
+        <p class="muted">Pour les téléchargements qui demandent une connexion. Les secrets sont chiffrés avec votre session Windows. Pour YouTube, voir « Cookies du navigateur ».</p>
+        <ul id="login-list" class="login-list"></ul>
+        <div class="grid two">
+          <label>Site <input id="login-host" type="text" placeholder="exemple.com" autocomplete="off" spellcheck="false"></label>
+          <label>Type
+            <select id="login-type">
+              <option value="basic">Identifiant et mot de passe</option>
+              <option value="bearer">Jeton (Bearer)</option>
+              <option value="cookie">Cookie</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid two">
+          <label id="login-user-label">Identifiant <input id="login-user" type="text" autocomplete="off" spellcheck="false"></label>
+          <label><span id="login-secret-label">Mot de passe</span> <input id="login-secret" type="password" autocomplete="new-password" spellcheck="false"></label>
+        </div>
+        <p id="login-error" class="error" role="alert"></p>
+        <span class="row2"><button type="button" id="login-add">Ajouter ou remplacer</button></span>
       </fieldset>
       <fieldset>
         <legend>Apparence</legend>

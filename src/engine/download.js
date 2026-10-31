@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const { probe } = require('./probe');
+const { TokenBucket } = require('./tokenBucket');
 const { sleep, uniquePath, friendlyError, settleFinished } = require('./util');
 
 const MIN_SEGMENT = 1024 * 1024;
@@ -22,6 +23,7 @@ class FatalError extends Error {
 function httpError(status) {
   const err = new FatalError(`Le serveur a répondu ${status}`);
   err.expired = status === 401 || status === 403 || status === 410;
+  err.status = status;
   return err;
 }
 
@@ -45,10 +47,16 @@ class Download extends EventEmitter {
     this.ctx = ctx;
     this.state = state;
     this.limiter = limiter;
+    this.own = new TokenBucket((Number(state.speedLimitKBps) || 0) * 1024); // this download's own ceiling, on top of the shared one
     this.abort = null;
     this.running = null;
     this.samples = [];
     this.stopStatus = 'paused';
+    // Connections allowed at once: starts at the configured number and drops when the server pushes back.
+    this.allowed = Infinity;
+    this.workers = 0;
+    this.waiters = [];
+    this.lastThrottle = 0;
   }
 
   get id() {
@@ -63,6 +71,70 @@ class Download extends EventEmitter {
     const { segments } = this.state;
     if (!segments) return 0;
     return segments.reduce((sum, s) => sum + (s.pos - s.start), 0);
+  }
+
+  /** The fetch to use: the one that goes through the proxy when there is one. */
+  _fetch(url, init) {
+    return (this.ctx.fetch ?? fetch)(url, init);
+  }
+
+  /** Login headers for the site this address belongs to (none for any other host). */
+  _authHeaders(url) {
+    return (url && this.ctx.siteAuth?.(url)) || {};
+  }
+
+  _acquire(signal) {
+    return new Promise((resolve, reject) => {
+      const attempt = () => {
+        if (signal.aborted) return reject(signal.reason ?? new Error('aborted'));
+        if (this.workers < this.allowed) {
+          this.workers++;
+          return resolve();
+        }
+        this.waiters.push(attempt);
+        return undefined;
+      };
+      attempt();
+    });
+  }
+
+  _release() {
+    this.workers--;
+    this._wake();
+  }
+
+  _wake() {
+    for (const w of this.waiters.splice(0)) w();
+  }
+
+  /** The server answered 429 or 503: one connection fewer (never below one) until things calm down. */
+  _slowDown() {
+    this.lastThrottle = Date.now();
+    if (this.ctx.settings?.().adaptive === false) return;
+    this.allowed = Math.max(1, Math.min(this.allowed, this.workers) - 1);
+  }
+
+  /** After a quiet spell one connection comes back, up to the configured number. */
+  _speedUp() {
+    if (this.allowed < this.state.connections && Date.now() - this.lastThrottle > 8000) {
+      this.allowed++;
+      this.lastThrottle = Date.now();
+      this._wake();
+    }
+  }
+
+  /** Waits for room under both the shared limit and this download's own limit. */
+  async _take(bytes, signal) {
+    await this.limiter.take(bytes, signal);
+    await this.own.take(bytes, signal);
+  }
+
+  /** Own speed limit in KB/s, 0 for none. Takes effect at once for plain files. */
+  setLimit(kbps) {
+    const v = Math.max(0, Math.round(Number(kbps) || 0));
+    this.state.speedLimitKBps = v;
+    this.own.setRate(v * 1024);
+    this.emit('update');
   }
 
   speed() {
@@ -90,13 +162,17 @@ class Download extends EventEmitter {
 
   _set(status, error = null) {
     this.state.status = status;
-    if (status === 'completed' && this.state.headers) this.state.headers.cookie = ''; // not needed any more, do not keep it on disk
+    if (status === 'completed') {
+      if (this.state.headers) this.state.headers.cookie = ''; // not needed any more, do not keep it on disk
+      this.state.retryAt = null;
+      this.state.retryCount = 0;
+    }
     this.state.error = error;
     this.emit('update');
   }
 
-  _headers() {
-    const h = {};
+  _headers(url = this.state.finalUrl) {
+    const h = { ...this._authHeaders(url) };
     const { referer, cookie, userAgent } = this.state.headers ?? {};
     if (referer) h.Referer = referer;
     if (cookie) h.Cookie = cookie;
@@ -116,6 +192,7 @@ class Download extends EventEmitter {
     this.abort = new AbortController();
     this.stopStatus = 'paused';
     this.state.needsRefresh = false;
+    this.state.retryable = false;
     this._set('downloading');
     this.running = this._run(this.abort.signal)
       .catch((err) => {
@@ -124,8 +201,15 @@ class Download extends EventEmitter {
         } else if (err.expired) {
           // Keeps the partial file: a fresh link for the same file resumes where it stopped.
           this.state.needsRefresh = true;
-          this._set('error', `${friendlyError(err)} : le lien a peut-être expiré`);
+          this._set(
+            'error',
+            err.status === 401
+              ? 'Connexion requise : ajoutez ce site dans Paramètres → Sites connectés'
+              : `${friendlyError(err)} : le lien a peut-être expiré`,
+          );
         } else {
+          // A dropped connection is worth another try later; a refusal or a bad answer is not.
+          this.state.retryable = !err.fatal || err.retryable === true;
           this._set('error', friendlyError(err));
         }
       })
@@ -150,7 +234,7 @@ class Download extends EventEmitter {
   async _prepare(signal) {
     const s = this.state;
     if (s.size === undefined || s.size === null || !s.finalUrl) {
-      const info = await probe(s.url, this._baseHeaders(), signal);
+      const info = await probe(s.url, this._baseHeaders(s.url), signal, (u, i) => this._fetch(u, i));
       s.finalUrl = info.finalUrl;
       s.size = info.size;
       s.rangeOk = info.rangeOk;
@@ -177,9 +261,9 @@ class Download extends EventEmitter {
     }
   }
 
-  _baseHeaders() {
+  _baseHeaders(url = this.state.url) {
     const { referer, cookie, userAgent } = this.state.headers ?? {};
-    const h = {};
+    const h = { ...this._authHeaders(url) };
     if (referer) h.Referer = referer;
     if (cookie) h.Cookie = cookie;
     if (userAgent) h['User-Agent'] = userAgent;
@@ -190,21 +274,36 @@ class Download extends EventEmitter {
     await this._prepare(signal);
     const s = this.state;
     const fh = await fs.promises.open(this.partPath, 'r+');
-    const ticker = setInterval(() => this.emit('update'), 250);
+    this.allowed = Math.max(1, s.connections);
+    this.workers = 0;
+    this.lastThrottle = Date.now();
+    const wake = () => this._wake();
+    signal.addEventListener('abort', wake, { once: true });
+    const ticker = setInterval(() => {
+      this._speedUp();
+      this.emit('update');
+    }, 250);
     try {
       const pending = s.segments.filter((seg) => seg.pos <= seg.end);
       // A connection that finishes its segment takes over half of the slowest one still running,
       // so every connection stays busy until the very end.
       const running = new Set();
-      const runOne = async (seg) => {
-        running.add(seg);
+      // One slot per connection: a worker keeps its slot while it moves on to a segment it took over.
+      const runOne = async (first) => {
+        await this._acquire(signal);
         try {
-          await (s.rangeOk ? this._runRangeSegment(seg, fh, signal) : this._runStream(seg, fh, signal));
+          for (let seg = first; seg; ) {
+            running.add(seg);
+            try {
+              await (s.rangeOk ? this._runRangeSegment(seg, fh, signal) : this._runStream(seg, fh, signal));
+            } finally {
+              running.delete(seg);
+            }
+            seg = s.rangeOk && !signal.aborted ? this._steal(running) : null;
+          }
         } finally {
-          running.delete(seg);
+          this._release();
         }
-        const next = s.rangeOk && !signal.aborted ? this._steal(running) : null;
-        return next ? runOne(next) : undefined;
       };
       try {
         await Promise.all(pending.map(runOne));
@@ -227,6 +326,7 @@ class Download extends EventEmitter {
       await fh.sync();
     } finally {
       clearInterval(ticker);
+      signal.removeEventListener('abort', wake);
       await fh.close().catch(() => {});
     }
     if (signal.aborted) return;
@@ -269,8 +369,8 @@ class Download extends EventEmitter {
     while (seg.pos <= seg.end) {
       const before = seg.pos;
       try {
-        const res = await fetch(s.finalUrl, {
-          headers: { ...this._headers(), Range: `bytes=${seg.pos}-${seg.end}` },
+        const res = await this._fetch(s.finalUrl, {
+          headers: { ...this._headers(s.finalUrl), Range: `bytes=${seg.pos}-${seg.end}` },
           redirect: 'follow',
           signal,
         });
@@ -282,7 +382,12 @@ class Download extends EventEmitter {
         }
         if (res.status !== 206) {
           await res.body?.cancel().catch(() => {});
-          if (res.status >= 500 || res.status === 429) throw new Error(`HTTP ${res.status}`);
+          if (res.status >= 500 || res.status === 429) {
+            const busy = new Error(`HTTP ${res.status}`);
+            busy.throttled = res.status === 429 || res.status === 503;
+            busy.retryAfter = Math.min(30, Number(res.headers.get('retry-after')) || 0);
+            throw busy;
+          }
           throw httpError(res.status);
         }
         const reader = res.body.getReader();
@@ -296,7 +401,7 @@ class Download extends EventEmitter {
             break;
           }
           const chunk = value.length > room ? value.subarray(0, room) : value;
-          await this.limiter.take(chunk.length, signal);
+          await this._take(chunk.length, signal);
           const at = seg.pos;
           await this._write(fh, chunk, at);
           const kept = Math.max(0, Math.min(chunk.length, seg.end + 1 - at)); // end may have moved during the write
@@ -312,7 +417,19 @@ class Download extends EventEmitter {
         if (signal.aborted || err.fatal) throw err;
         if (seg.pos > before) attempt = 0;
         if (++attempt > MAX_RETRIES) throw err;
-        await sleep(Math.min(8000, 500 * 2 ** attempt), signal);
+        const wait = Math.max(err.retryAfter ? err.retryAfter * 1000 : 0, Math.min(8000, 500 * 2 ** attempt));
+        if (err.throttled) {
+          // Give the slot back while waiting: with fewer connections allowed, others may go first.
+          this._slowDown();
+          this._release();
+          try {
+            await sleep(wait, signal);
+            await this._acquire(signal);
+          } catch (e) {
+            this.workers++; // the worker's own release balances this
+            throw e;
+          }
+        } else await sleep(wait, signal);
       }
     }
   }
@@ -325,8 +442,8 @@ class Download extends EventEmitter {
       seg.pos = 0;
       this.samples = [];
       try {
-        const res = await fetch(s.finalUrl, {
-          headers: this._baseHeaders(),
+        const res = await this._fetch(s.finalUrl, {
+          headers: this._baseHeaders(s.finalUrl),
           redirect: 'follow',
           signal,
         });
@@ -339,7 +456,7 @@ class Download extends EventEmitter {
         for (;;) {
           const { done, value } = await reader.read();
           if (done) break;
-          await this.limiter.take(value.length, signal);
+          await this._take(value.length, signal);
           await this._write(fh, value, seg.pos);
           seg.pos += value.length;
           this.samples.push([Date.now(), value.length]);

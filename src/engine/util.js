@@ -24,6 +24,7 @@ function sleep(ms, signal) {
 function sanitizeFilename(name) {
   let n = String(name ?? '')
     .replace(/[\\/]+/g, '_')
+    // eslint-disable-next-line no-control-regex -- control characters are not allowed in a file name
     .replace(/[<>:"|?*\u0000-\u001f]/g, '_')
     .replace(/^[.\s]+|[.\s]+$/g, '')
     .slice(0, 180);

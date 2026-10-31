@@ -85,12 +85,12 @@ class HlsDownload extends Download {
     return snap;
   }
 
-  _headers() {
-    return this._baseHeaders();
+  _headers(url) {
+    return this._baseHeaders(url);
   }
 
   async _text(url, signal) {
-    const res = await fetch(url, { headers: this._baseHeaders(), redirect: 'follow', signal });
+    const res = await this._fetch(url, { headers: this._baseHeaders(url), redirect: 'follow', signal });
     if (res.status >= 400) throw httpError(res.status);
     return { text: await res.text(), url: res.url || url };
   }
@@ -99,7 +99,7 @@ class HlsDownload extends Download {
     let attempt = 0;
     for (;;) {
       try {
-        const res = await fetch(url, { headers: this._baseHeaders(), redirect: 'follow', signal });
+        const res = await this._fetch(url, { headers: this._baseHeaders(url), redirect: 'follow', signal });
         if (res.status >= 500 || res.status === 429) throw new Error(`HTTP ${res.status}`);
         if (res.status >= 400) throw httpError(res.status);
         let buf = Buffer.from(await res.arrayBuffer());
@@ -108,7 +108,7 @@ class HlsDownload extends Download {
           const d = crypto.createDecipheriv('aes-128-cbc', k, ivFor(key, seq));
           buf = Buffer.concat([d.update(buf), d.final()]);
         }
-        await this.limiter.take(buf.length, signal);
+        await this._take(buf.length, signal);
         return buf;
       } catch (err) {
         if (signal.aborted || err.fatal) throw err;
@@ -121,7 +121,7 @@ class HlsDownload extends Download {
   async _key(url, signal) {
     this._keys ??= new Map();
     if (!this._keys.has(url)) {
-      const res = await fetch(url, { headers: this._baseHeaders(), signal });
+      const res = await this._fetch(url, { headers: this._baseHeaders(url), signal });
       if (res.status >= 400) throw new FatalError('Clé de déchiffrement inaccessible');
       const k = Buffer.from(await res.arrayBuffer());
       if (k.length !== 16) throw new FatalError('Vidéo protégée (DRM) : le téléchargement n’est pas possible');

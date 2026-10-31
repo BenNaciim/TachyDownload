@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, Tray, Menu, nativeImage, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, Tray, Menu, nativeImage, Notification, safeStorage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
@@ -12,6 +12,11 @@ const { isPlaylistUrl, isVideoPage, probeVideo } = require('./engine/ytdlp');
 const { categoryFor, filenameFromUrl, sanitizeFilename } = require('./engine/util');
 const { execFile, spawn } = require('node:child_process');
 const updater = require('./updater');
+const { createLogins } = require('./logins');
+const { overallProgress } = require('./progress');
+const { menuTemplate } = require('./menu');
+
+const PROJECT_URL = 'https://github.com/BenNaciim/TachyDownload';
 
 // The installer runs the app once with --setup-tools to fetch yt-dlp and ffmpeg: no window, no lock.
 const setupTools = process.argv.includes('--setup-tools');
@@ -24,6 +29,7 @@ let manager = null;
 let api = null;
 let tools = null;
 let tray = null;
+let logins = null;
 const startHidden = process.argv.includes('--hidden');
 
 function loadToken(dir) {
@@ -171,6 +177,7 @@ function registerIpc(token) {
 
   ipcMain.handle('dm:pause',(_e, id) => manager.pause(str(id, 100)));
   ipcMain.handle('dm:resume', (_e, id) => manager.resume(str(id, 100)));
+  ipcMain.handle('dm:setLimit', (_e, id, kbps) => manager.setTaskLimit(str(id, 100), Number(kbps)));
   ipcMain.handle('dm:remove', (_e, id, deleteFile) =>
     manager.remove(str(id, 100), { deleteFile: deleteFile === true }),
   );
@@ -197,11 +204,13 @@ function registerIpc(token) {
     return r.canceled ? null : r.filePaths[0];
   });
   ipcMain.handle('dm:copyToken', () => clipboard.writeText(token));
-  ipcMain.handle('dm:copyDiagnostic', () => {
-    const file = path.join(path.dirname(manager.storePath), 'ytdlp-last.log');
-    if (!fs.existsSync(file)) throw new Error('Aucun diagnostic enregistré pour le moment');
-    clipboard.writeText(fs.readFileSync(file, 'utf8'));
+  ipcMain.handle('dm:copyDiagnostic', () => copyDiagnostic());
+  ipcMain.handle('dm:logins:list', () => logins.list());
+  ipcMain.handle('dm:logins:save', (_e, entry) => {
+    if (typeof entry !== 'object' || entry === null) throw new Error('Paramètre invalide');
+    return logins.save({ host: str(entry.host, 300), type: str(entry.type, 20), user: str(entry.user ?? '', 300), secret: str(entry.secret ?? '', 4200) });
   });
+  ipcMain.handle('dm:logins:remove', (_e, host) => logins.remove(str(host, 300)));
 
   const entryOf = (e) => confirms.get(e.sender.id);
   ipcMain.handle('dm:confirm:init', async (e) => {
@@ -243,7 +252,7 @@ function registerIpc(token) {
     if (!entry || entry.req.kind !== 'ytdlp' || isPlaylistUrl(entry.req.url)) return { unavailable: true };
     if (!ytdlp) return { unavailable: true, error: 'yt-dlp n’est pas installé : ouvrez Paramètres → Vidéos.' };
     try {
-      return { ...(await probeVideo(ytdlp, entry.req.url, { deno: tools.find('deno'), cookies: manager.settings.ytCookies })), ffmpeg: Boolean(tools.find('ffmpeg')), maxHeight: manager.settings.videoMaxHeight };
+      return { ...(await probeVideo(ytdlp, entry.req.url, { deno: tools.find('deno'), cookies: manager.settings.ytCookies, proxy: manager.settings.proxy })), ffmpeg: Boolean(tools.find('ffmpeg')), maxHeight: manager.settings.videoMaxHeight };
     } catch (err) {
       return { unavailable: true, error: err.message };
     }
@@ -253,6 +262,57 @@ function registerIpc(token) {
     if (!entry || entry.done || typeof a !== 'object' || a === null) return undefined;
     return finishConfirm(entry, ['now', 'later'].includes(a.action) ? a : { action: 'cancel' });
   });
+}
+
+function copyDiagnostic() {
+  const file = path.join(path.dirname(manager.storePath), 'ytdlp-last.log');
+  if (!fs.existsSync(file)) throw new Error('Aucun diagnostic enregistré pour le moment');
+  clipboard.writeText(fs.readFileSync(file, 'utf8'));
+}
+
+const pauseAll = () => manager.list().forEach((t) => ['downloading', 'queued'].includes(t.status) && manager.pause(t.id));
+const resumeAll = () => manager.list().forEach((t) => ['paused', 'error'].includes(t.status) && manager.resume(t.id));
+
+// ---- the window's menu bar ----------------------------------------------------------------
+
+const attention = (message, type = 'info') => dialog.showMessageBox(win ?? undefined, { type, title: 'Tachy Download', message, buttons: ['OK'] });
+
+function buildMenu() {
+  const actions = {
+    ui: (action, arg) => {
+      showWindow();
+      send('dm:menu', { action, arg });
+    },
+    openFolder: () => shell.openPath(manager.settings.dir),
+    quit: () => {
+      app.isQuitting = true;
+      app.quit();
+    },
+    pauseAll,
+    resumeAll,
+    clearFinished: () => manager.clearCompleted(),
+    setLimit: (kbps) => manager.setSettings({ speedLimitKBps: kbps }),
+    setAfterAll: (value) => manager.setSettings({ afterAll: value }),
+    checkUpdate: async () => {
+      try {
+        const info = await lookForUpdate();
+        await attention(info ? `La version ${info.version} est disponible : utilisez le bandeau en haut de la fenêtre pour l’installer.` : `Tachy Download est à jour (version ${app.getVersion()}).`);
+      } catch (err) {
+        dialog.showErrorBox('Tachy Download', `Impossible de vérifier les mises à jour : ${err.message}`);
+      }
+    },
+    copyDiagnostic: () => {
+      try {
+        copyDiagnostic();
+        attention('Le diagnostic est copié : collez-le dans un message.');
+      } catch (err) {
+        attention(err.message);
+      }
+    },
+    openProject: () => shell.openExternal(PROJECT_URL),
+    about: () => attention(`Tachy Download ${app.getVersion()}\nGestionnaire de téléchargement pour Windows.\n${PROJECT_URL}`),
+  };
+  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate({ settings: manager.settings, actions, devTools: !app.isPackaged })));
 }
 
 const lastStatus = new Map();
@@ -329,7 +389,6 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
-  win.setMenuBarVisibility(false);
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -431,9 +490,10 @@ function createTray() {
   const menu = () =>
     Menu.buildFromTemplate([
       { label: 'Ouvrir Tachy Download', click: showWindow },
+      { label: 'Ouvrir le dossier de téléchargement', click: () => shell.openPath(manager.settings.dir) },
       { type: 'separator' },
-      { label: 'Tout mettre en pause', click: () => manager.list().forEach((t) => ['downloading', 'queued'].includes(t.status) && manager.pause(t.id)) },
-      { label: 'Tout reprendre', click: () => manager.list().forEach((t) => ['paused', 'error'].includes(t.status) && manager.resume(t.id)) },
+      { label: 'Tout mettre en pause', click: pauseAll },
+      { label: 'Tout reprendre', click: resumeAll },
       { type: 'separator' },
       { label: 'Quitter', click: () => { app.isQuitting = true; app.quit(); } },
     ]);
@@ -443,13 +503,17 @@ function createTray() {
     const all = manager.list();
     const active = all.filter((t) => t.status === 'downloading');
     const speed = active.reduce((n, t) => n + t.speed, 0);
+    const progress = overallProgress(all);
+    const pct = progress.mode === 'normal' ? ` (${Math.floor(progress.value * 100)} %)` : '';
     tray.setToolTip(
       active.length
-        ? `Tachy Download : ${active.length} en cours, ${(speed / 1048576).toFixed(1).replace('.', ',')} Mo/s`
+        ? `Tachy Download : ${active.length} en cours${pct}, ${(speed / 1048576).toFixed(1).replace('.', ',')} Mo/s`
         : 'Tachy Download',
     );
+    // The taskbar button shows the overall progress, like a browser download does.
+    if (win && !win.isDestroyed()) win.setProgressBar(progress.value, { mode: progress.mode });
   };
-  setInterval(refresh, 2000).unref();
+  setInterval(refresh, 1000).unref();
   refresh();
 }
 
@@ -507,10 +571,23 @@ app.whenReady().then(async () => {
   setTimeout(keepAppFresh, 45_000).unref();
   setInterval(keepAppFresh, 12 * 3600_000).unref();
 
+  // Site logins are encrypted with the Windows account (DPAPI) and never leave this process but as headers.
+  logins = createLogins({
+    file: path.join(dataDir, 'logins.json'),
+    crypt: {
+      encrypt: (text) => {
+        if (!safeStorage.isEncryptionAvailable()) throw new Error('Le chiffrement n’est pas disponible sur cet ordinateur');
+        return safeStorage.encryptString(text).toString('base64');
+      },
+      decrypt: (b64) => safeStorage.decryptString(Buffer.from(b64, 'base64')),
+    },
+  });
+
   manager = new DownloadManager({
     storePath: path.join(dataDir, 'downloads.json'),
     settings: { dir: app.getPath('downloads'), categories: true },
     tools,
+    siteAuth: (url) => logins.headersFor(url),
   });
   manager.load();
   if (!manager.settings.dir) manager.settings.dir = app.getPath('downloads');
@@ -531,10 +608,14 @@ app.whenReady().then(async () => {
     onStatusChange(snap);
   });
   manager.on('removed', (id) => send('dm:removed', id));
-  manager.on('settings', (s) => send('dm:settings', s));
+  manager.on('settings', (st) => {
+    send('dm:settings', st);
+    buildMenu(); // the limit and end-of-queue choices are ticked in the menu
+  });
   manager.start();
 
   registerIpc(token);
+  buildMenu();
   createWindow();
   createTray();
   applyAutoStart();

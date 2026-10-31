@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('dm', {
   pause: (id) => ipcRenderer.invoke('dm:pause', id),
   resume: (id) => ipcRenderer.invoke('dm:resume', id),
   remove: (id, deleteFile) => ipcRenderer.invoke('dm:remove', id, deleteFile),
+  setLimit: (id, kbps) => ipcRenderer.invoke('dm:setLimit', id, kbps),
   reveal: (id) => ipcRenderer.invoke('dm:reveal', id),
   open: (id) => ipcRenderer.invoke('dm:open', id),
   setSettings: (patch) => ipcRenderer.invoke('dm:settings:set', patch),
@@ -33,4 +34,8 @@ contextBridge.exposeInMainWorld('dm', {
   onUpdate: on('dm:update'),
   onRemoved: on('dm:removed'),
   onSettings: on('dm:settings'),
+  onMenu: on('dm:menu'),
+  logins: () => ipcRenderer.invoke('dm:logins:list'),
+  saveLogin: (entry) => ipcRenderer.invoke('dm:logins:save', entry),
+  removeLogin: (host) => ipcRenderer.invoke('dm:logins:remove', host),
 });

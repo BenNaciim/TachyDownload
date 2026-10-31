@@ -277,6 +277,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 
 const cleanTitle = (t) =>
   (t || 'video')
+    // eslint-disable-next-line no-control-regex -- control characters are not allowed in a file name
     .replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()

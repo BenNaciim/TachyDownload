@@ -15,16 +15,6 @@ function insideRoundedRect(x, y, w, h, r) {
   return (x - cx) ** 2 + (y - cy) ** 2 <= r * r;
 }
 
-function insideTriangle(px, py, [ax, ay], [bx, by], [cx, cy]) {
-  const d = (x1, y1, x2, y2, x3, y3) => (x1 - x3) * (y2 - y3) - (x2 - x3) * (y1 - y3);
-  const d1 = d(px, py, ax, ay, bx, by);
-  const d2 = d(px, py, bx, by, cx, cy);
-  const d3 = d(px, py, cx, cy, ax, ay);
-  const neg = d1 < 0 || d2 < 0 || d3 < 0;
-  const pos = d1 > 0 || d2 > 0 || d3 > 0;
-  return !(neg && pos);
-}
-
 const distToSegment = (px, py, [ax, ay], [bx, by]) => {
   const dx = bx - ax, dy = by - ay;
   const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)));
