@@ -177,3 +177,24 @@ test('finished downloads can be taken off the list in one go, their files stay',
     await srv.close();
   }
 });
+
+test('pausing shows at once, and resuming right after still finishes the file', async () => {
+  const body = randomBody(600 * 1024);
+  const srv = await startServer(body, { bytesPerSec: 300 * 1024 });
+  const dir = tmpDir();
+  const m = new DownloadManager({ settings: { dir }, tickMs: 30 });
+  m.start();
+  try {
+    const { id } = m.add(srv.url, { filename: 'p.bin' });
+    await waitFor(() => m.list().find((t) => t.id === id).status === 'downloading');
+    const stopping = m.pause(id);
+    assert.equal(m.list().find((t) => t.id === id).status, 'paused', 'the status changes before the transfer is over');
+    m.resume(id);
+    await stopping;
+    await waitFor(() => m.list().find((t) => t.id === id).status === 'completed', 20000);
+    assert.deepEqual(fs.readFileSync(path.join(dir, 'p.bin')), body);
+  } finally {
+    await m.shutdown();
+    await srv.close();
+  }
+});

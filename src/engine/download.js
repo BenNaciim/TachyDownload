@@ -197,7 +197,8 @@ class Download extends EventEmitter {
     this.running = this._run(this.abort.signal)
       .catch((err) => {
         if (this.abort.signal.aborted) {
-          this._set(this.stopStatus);
+          // stop() already showed the new status; a resume while the process was dying must not be undone.
+          if (this.state.status === 'downloading') this._set(this.stopStatus);
         } else if (err.expired) {
           // Keeps the partial file: a fresh link for the same file resumes where it stopped.
           this.state.needsRefresh = true;
@@ -228,6 +229,8 @@ class Download extends EventEmitter {
     }
     this.stopStatus = next;
     this.abort.abort();
+    // Show it at once: killing yt-dlp and its children can take a while, and the click should answer now.
+    this._set(next);
     return this.running;
   }
 
