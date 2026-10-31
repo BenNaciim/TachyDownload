@@ -9,6 +9,7 @@ const { createExtensionServer } = require('./server');
 const { Tools } = require('./engine/tools');
 const { isIdle, commandFor } = require('./afterall');
 const { isPlaylistUrl, isVideoPage, probeVideo } = require('./engine/ytdlp');
+const { isWebPage } = require('./engine/probe');
 const { categoryFor, filenameFromUrl, sanitizeFilename } = require('./engine/util');
 const { execFile, spawn } = require('node:child_process');
 const updater = require('./updater');
@@ -123,16 +124,19 @@ function registerIpc(token) {
       throw new Error('Liste de liens invalide');
     }
     const startAt = Number(opts?.startAt) || null;
-    const kind = opts?.kind === 'ytdlp' ? 'ytdlp' : undefined;
+    const asked = opts?.kind === 'ytdlp' ? 'ytdlp' : undefined;
     const added = [];
     const errors = [];
     for (const raw of urls) {
       try {
+        const link = str(raw).trim();
+        // A page of a site the app does not know (it answers with HTML) is left to yt-dlp, which knows many more.
+        const kind = asked ?? (/^https?:\/\//i.test(link) && !isPlaylistUrl(link) && !isVideoPage(link) && (await isWebPage(link, {}, (u, i) => manager.fetch(u, i))) ? 'ytdlp' : undefined);
         if (isPlaylistUrl(raw)) added.push(...(await manager.addPlaylist(str(raw), { startAt })));
         else if (manager.settings.confirmDownloads && !startAt && (kind === 'ytdlp' || isVideoPage(str(raw)))) {
           // A video page: let the user pick the quality, the audio language and the folder first.
           if (!/^https?:\/\//i.test(str(raw))) throw new Error('Adresse invalide');
-          askAboutDownload({ url: str(raw).trim(), kind: 'ytdlp' });
+          askAboutDownload({ url: link, kind: 'ytdlp' });
           added.push({});
         } else added.push(manager.add(str(raw), { startAt, kind }));
       } catch (err) {

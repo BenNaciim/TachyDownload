@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, execFile } = require('node:child_process');
 const { Download, FatalError } = require('./download');
-const { sanitizeFilename, settleFinished } = require('./util');
+const { probe } = require('./probe');
+const { sanitizeFilename, settleFinished, uniquePath } = require('./util');
 
 /** Pages that yt-dlp handles and that the browser cannot give as a plain file. */
 const VIDEO_PAGE = [
@@ -86,6 +87,18 @@ function probeVideo(ytdlp, url, { deno, cookies, proxy } = {}) {
   });
 }
 
+/**
+ * The plain file behind a video when yt-dlp's chosen format is one http(s) file (no merge, no fragments):
+ * the app can then fetch it itself over several connections. Null for anything else.
+ */
+function directFile(info) {
+  if (!info || info.requested_formats || info.fragments || typeof info.url !== 'string') return null;
+  if (!/^https?:\/\//i.test(info.url) || !/^https?$/i.test(info.protocol ?? '')) return null;
+  const ext = /^[a-z0-9]{2,5}$/i.test(info.ext ?? '') ? info.ext.toLowerCase() : 'mp4';
+  if (ext === 'm3u8' || ext === 'mpd') return null;
+  return { url: info.url, ext, title: String(info.title || 'video'), userAgent: info.http_headers?.['User-Agent'] ?? '' };
+}
+
 function summarizeProbe(info) {
   const formats = Array.isArray(info.formats) ? info.formats : [];
   const heights = [...new Set(formats.filter((f) => f.vcodec && f.vcodec !== 'none' && f.height).map((f) => f.height))].sort((a, b) => b - a);
@@ -117,6 +130,7 @@ function explain(msg) {
   if (/not a bot|sign in to confirm/i.test(m)) return 'YouTube demande de prouver que vous n’êtes pas un robot. Dans Paramètres → Vidéos, choisissez « Cookies du navigateur » (un navigateur où vous êtes connecté à YouTube), puis réessayez.';
   if (/confirm your age|inappropriate for some users/i.test(m)) return 'Vidéo réservée aux adultes : YouTube exige une connexion.';
   if (/private video|members-only|join this channel/i.test(m)) return 'Vidéo privée ou réservée aux abonnés.';
+  if (/unsupported url/i.test(m)) return 'Cette page ne contient aucune vidéo que yt-dlp sache télécharger.';
   if (/video unavailable|this video is unavailable|has been removed|no longer available|does not exist/i.test(m)) return 'Vidéo indisponible ou supprimée.';
   if (/not available in your country|blocked it in your country/i.test(m)) return 'Vidéo non disponible dans votre pays.';
   if (/live event will begin|is live|premieres in/i.test(m)) return 'Direct ou première pas encore terminés : téléchargement impossible.';
@@ -190,6 +204,7 @@ function findByVideoId(dir, id, since) {
 
 class YtdlpDownload extends Download {
   downloaded() {
+    if (this.state.direct) return super.downloaded();
     const y = this.state.ytd;
     return y ? y.base + y.cur : 0;
   }
@@ -224,6 +239,38 @@ class YtdlpDownload extends Download {
     return args;
   }
 
+  /** Asks yt-dlp which file it would download; resolves to directFile()'s answer, or null. */
+  _resolveDirect(ytdlp, signal) {
+    const cfg = this.ctx.settings?.() ?? {};
+    const args = ['-J', '--no-playlist', '--no-warnings', '--encoding', 'utf-8', ...formatArgs({ opts: this.state.ytOpts, maxHeight: Number(cfg.videoMaxHeight) || 1080, ffmpeg: this.ctx.ffmpeg?.() })];
+    const deno = this.ctx.deno?.();
+    if (deno) args.push('--js-runtimes', `deno:${deno}`);
+    if (cfg.proxy) args.push('--proxy', cfg.proxy);
+    if (cfg.ytCookies) args.push('--cookies-from-browser', cfg.ytCookies);
+    args.push(this.state.url);
+    return new Promise((resolve) =>
+      execFile(ytdlp, [...(this.ctx.ytdlpPrefix ?? []), ...args], { windowsHide: true, timeout: 60_000, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8', signal }, (err, stdout) => {
+        try {
+          resolve(err ? null : directFile(JSON.parse(stdout)));
+        } catch {
+          resolve(null);
+        }
+      }),
+    );
+  }
+
+  /** Downloads the plain file over several connections with the app's own engine. False when it cannot be done that way. */
+  async _runDirect(direct, signal) {
+    const s = this.state;
+    s.headers = { ...(s.headers ?? {}), referer: s.url, userAgent: direct.userAgent };
+    const info = await probe(direct.url, this._baseHeaders(direct.url), signal, (u, i) => this._fetch(u, i));
+    if (!info.rangeOk || !info.size) return false;
+    if (!s.segments) s.filename = path.basename(uniquePath(s.dir, `${sanitizeFilename(direct.title)}.${direct.ext}`));
+    Object.assign(s, { finalUrl: info.finalUrl, size: info.size, rangeOk: true, etag: info.etag, lastModified: info.lastModified, direct: true });
+    await Download.prototype._run.call(this, signal);
+    return true;
+  }
+
   async _run(signal) {
     const ytdlp = this.ctx.ytdlp?.();
     if (!ytdlp) {
@@ -231,6 +278,25 @@ class YtdlpDownload extends Download {
     }
     const s = this.state;
     fs.mkdirSync(s.dir, { recursive: true });
+    // A site that serves one plain file gets the app's own multi-connection download (yt-dlp would use one).
+    // The big sites hand out separate audio and video streams, so they go straight to yt-dlp.
+    if (!isVideoPage(s.url) && !s.ytOpts?.audioOnly) {
+      const direct = await this._resolveDirect(ytdlp, signal);
+      if (signal.aborted) return undefined;
+      try {
+        if (direct && (await this._runDirect(direct, signal))) return undefined;
+      } catch (err) {
+        if (signal.aborted) return undefined;
+        // the direct file refused us (an address bound to yt-dlp's own request, say): let yt-dlp do it
+      }
+    }
+    if (s.direct) {
+      s.direct = false;
+      s.segments = null;
+      s.finalUrl = null;
+      s.size = null;
+      fs.rmSync(this.partPath, { force: true });
+    }
     // yt-dlp counts what an earlier run already left on disk, so every run starts its own tally from zero
     // (a base kept from a paused run would be added on top and inflate the size).
     s.ytd = { base: 0, cur: 0, total: 0 };
@@ -326,4 +392,4 @@ class YtdlpDownload extends Download {
   }
 }
 
-module.exports = { YtdlpDownload, applyProgress, formatDiag, explain, isVideoPage, isPlaylistUrl, listPlaylist, probeVideo, summarizeProbe, formatArgs, cleanYtOpts };
+module.exports = { YtdlpDownload, directFile, applyProgress, formatDiag, explain, isVideoPage, isPlaylistUrl, listPlaylist, probeVideo, summarizeProbe, formatArgs, cleanYtOpts };

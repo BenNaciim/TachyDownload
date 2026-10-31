@@ -331,7 +331,7 @@ const cleanTitle = (t) =>
     .trim()
     .slice(0, 100);
 
-async function listFor(tabId, frameId) {
+async function listFor(tabId, frameId, { page = false } = {}) {
   const tab = await chrome.tabs.get(tabId).catch(() => null);
   if (tab && isVideoPage(tab.url)) {
     return [{ url: tab.url, kind: 'ytdlp', mime: '', size: 0, ext: '', at: Date.now() }];
@@ -343,11 +343,17 @@ async function listFor(tabId, frameId) {
   // The video being pointed at lives in one frame: offer what that frame played, when it played anything.
   const own = all.filter((x) => x.frameId === frameId);
   // Most recent first among streams: the one just started is the one being watched.
-  return [...(own.length ? own : all)].sort((a, b) => weight(b) - weight(a) || b.at - a.at);
+  const found = [...(own.length ? own : all)].sort((a, b) => weight(b) - weight(a) || b.at - a.at);
+  // A video is playing here but no stream was seen (the player hides it, or it has not started yet): the app
+  // can still try the page itself with yt-dlp, which knows many more sites.
+  if (!found.length && page && tab && /^https?:/i.test(tab.url || '')) {
+    return [{ url: tab.url, kind: 'ytdlp', mime: '', size: 0, ext: '', at: Date.now() }];
+  }
+  return found;
 }
 
 async function downloadItem(tabId, url) {
-  const item = (await listFor(tabId)).find((x) => x.url === url);
+  const item = (await listFor(tabId, undefined, { page: true })).find((x) => x.url === url);
   if (!item) return false;
   const tab = await chrome.tabs.get(tabId);
   if (item.kind === 'ytdlp') return sendToApp({ url: item.url, referrer: tab.url, kind: 'ytdlp' });
@@ -369,7 +375,7 @@ async function downloadItem(tabId, url) {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const tabId = msg.tabId ?? sender.tab?.id;
   (async () => {
-    if (msg.type === 'list') return { items: await listFor(tabId, sender.frameId) };
+    if (msg.type === 'list') return { items: await listFor(tabId, sender.frameId, { page: Boolean(msg.page) }) };
     if (msg.type === 'download') return { ok: await downloadItem(tabId, msg.url) };
     if (msg.type === 'poll') {
       await pollRefresh();

@@ -104,3 +104,38 @@ test('known yt-dlp messages become actions, unknown ones stay null', () => {
   assert.match(explain("Sign in to confirm you're not a bot"), /robot/);
   assert.equal(explain('something nobody has seen'), null);
 });
+
+test('a plain-file site is fetched by the app itself over several connections', async () => {
+  const { startServer } = require('./helpers');
+  const body = Buffer.alloc(5 * 1024 * 1024, 9);
+  const srv = await startServer(body);
+  const dir = tmpDir();
+  const dataDir = tmpDir();
+  process.env.FAKE_DIRECT_URL = srv.url;
+  const tools = { find: (n) => (n === 'ytdlp' ? process.execPath : null), ytdlpPrefix: [FAKE] };
+  const m = new DownloadManager({ storePath: path.join(dataDir, 'downloads.json'), settings: { dir, connections: 4 }, tickMs: 50, tools });
+  m.start();
+  try {
+    const { id } = m.add('https://videos.example.org/watch/42', { kind: 'ytdlp' });
+    await waitFor(() => ['completed', 'error'].includes(m.list()[0].status), 20000);
+    const t = m.list()[0];
+    assert.equal(t.status, 'completed', t.error ?? '');
+    assert.equal(t.filename, 'Direct clip.mp4');
+    assert.deepEqual(fs.readFileSync(path.join(dir, 'Direct clip.mp4')), body);
+    assert.ok(t.segments?.length > 1 || t.direct, 'the app split the file itself');
+    assert.ok(id);
+  } finally {
+    await m.shutdown();
+    await srv.close();
+    delete process.env.FAKE_DIRECT_URL;
+  }
+});
+
+test('only a single plain http file counts as a direct download', () => {
+  const { directFile } = require('../src/engine/ytdlp');
+  assert.deepEqual(directFile({ url: 'https://cdn.x/v.mp4', protocol: 'https', ext: 'mp4', title: 'T' }), { url: 'https://cdn.x/v.mp4', ext: 'mp4', title: 'T', userAgent: '' });
+  assert.equal(directFile({ url: 'https://cdn.x/v.m3u8', protocol: 'm3u8_native', ext: 'mp4' }), null);
+  assert.equal(directFile({ url: 'https://cdn.x/v.mp4', protocol: 'https', ext: 'mp4', requested_formats: [{}, {}] }), null);
+  assert.equal(directFile({ url: 'https://cdn.x/v.mp4', protocol: 'https', ext: 'mp4', fragments: [{}] }), null);
+  assert.equal(directFile({ protocol: 'https', ext: 'mp4' }), null);
+});

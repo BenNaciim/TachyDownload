@@ -54,4 +54,18 @@ async function probe(url, headers = {}, signal, fetchFn = fetch) {
   }
 }
 
-module.exports = { probe };
+/**
+ * True when the address answers with a web page rather than a file: the link of a video page on a site
+ * the app does not know by name, which only yt-dlp can turn into a video. Any failure counts as "no".
+ */
+async function isWebPage(url, headers = {}, fetchFn = fetch) {
+  try {
+    const res = await fetchFn(url, { headers: { ...headers, Range: 'bytes=0-0' }, redirect: 'follow', signal: AbortSignal.timeout(8000) });
+    await res.body?.cancel().catch(() => {});
+    return res.status < 400 && /^(text\/html|application\/xhtml)/i.test(res.headers.get('content-type') ?? '');
+  } catch {
+    return false;
+  }
+}
+
+module.exports = { probe, isWebPage };

@@ -99,7 +99,7 @@
     if (r.width < 240 || r.height < 135) return;
     if (Date.now() - fetchedAt > 1500) {
       fetchedAt = Date.now();
-      items = (await ask({ type: 'list' }))?.items ?? [];
+      items = (await ask({ type: 'list', page: true }))?.items ?? [];
     }
     if (items.length === 0) return;
     const ui = ensureUi();
@@ -135,9 +135,11 @@
         clearTimeout(hideTimer);
         return;
       }
-      if (e.target instanceof HTMLVideoElement) {
+      // Players lay their own controls over the video: look at what lies under the pointer, not only at the target.
+      const video = e.target instanceof HTMLVideoElement ? e.target : document.elementsFromPoint(e.clientX, e.clientY).find((el) => el instanceof HTMLVideoElement);
+      if (video) {
         clearTimeout(hideTimer);
-        onEnter(e.target);
+        onEnter(video);
       } else if (host) {
         clearTimeout(hideTimer);
         hideTimer = setTimeout(() => (host.style.display = 'none'), 1800);

@@ -196,3 +196,30 @@ test('with the adaptive setting off the number of connections is left alone', { 
     await srv.close();
   }
 });
+
+test('an address that answers with a web page is told apart from a file', async () => {
+  const { isWebPage } = require('../src/engine/probe');
+  const server = http.createServer((req, res) => {
+    if (req.url === '/page') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end('<html></html>');
+    }
+    if (req.url === '/gone') {
+      res.writeHead(404, { 'Content-Type': 'text/html' });
+      return res.end('no');
+    }
+    res.writeHead(200, { 'Content-Type': 'video/mp4' });
+    return res.end('x');
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    assert.equal(await isWebPage(`${base}/page`), true);
+    assert.equal(await isWebPage(`${base}/clip`), false);
+    assert.equal(await isWebPage(`${base}/gone`), false);
+    assert.equal(await isWebPage('http://127.0.0.1:1/x'), false);
+  } finally {
+    server.closeAllConnections?.();
+    await new Promise((r) => server.close(r));
+  }
+});

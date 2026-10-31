@@ -5,6 +5,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const args = process.argv.slice(2);
+if (args.includes('-J')) {
+  // The probe for a plain-file site: one http file, nothing to merge.
+  if (process.env.FAKE_DIRECT_URL) {
+    process.stdout.write(JSON.stringify({ url: process.env.FAKE_DIRECT_URL, protocol: 'https', ext: 'mp4', title: 'Direct clip', http_headers: { 'User-Agent': 'fake' } }));
+    process.exit(0);
+  }
+  process.stderr.write('ERROR: no probe here\n');
+  process.exit(1);
+}
 const dir = args[args.indexOf('-P') + 1];
 if (process.env.FAKE_ARGS_FILE) fs.writeFileSync(process.env.FAKE_ARGS_FILE, JSON.stringify(args));
 const mode = process.env.FAKE_MODE || 'ok';
