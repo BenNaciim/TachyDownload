@@ -17,6 +17,17 @@
       }
     });
 
+  /** " · 1080p · 54 min · Français" for a stream, or its host when nothing more is known. */
+  function streamInfo(it) {
+    if (it.kind === 'ytdlp') return '';
+    const bits = [];
+    if (it.height) bits.push(`${it.height}p`);
+    if (it.duration) bits.push(it.duration >= 3600 ? `${Math.floor(it.duration / 3600)} h ${String(Math.round((it.duration % 3600) / 60)).padStart(2, '0')}` : `${Math.max(1, Math.round(it.duration / 60))} min`);
+    if (it.langs?.length) bits.push(it.langs.join(', '));
+    if (!bits.length) bits.push(new URL(it.url).hostname);
+    return ` · ${bits.join(' · ')}`;
+  }
+
   function ensureUi() {
     if (host) return host;
     host = document.createElement('div');
@@ -71,7 +82,7 @@
       menu.replaceChildren(
         ...items.map((it) => {
           const b = document.createElement('button');
-          b.textContent = `${it.kind === 'ytdlp' ? 'Vidéo de la page' : it.kind === 'hls' ? 'Flux vidéo (HLS)' : it.ext.toUpperCase()}${it.size ? ` · ${size(it.size)}` : ''}`;
+          b.textContent = `${it.kind === 'ytdlp' ? 'Vidéo de la page' : it.kind === 'hls' ? 'Flux vidéo (HLS)' : it.ext.toUpperCase()}${it.size ? ` · ${size(it.size)}` : ''}${streamInfo(it)}`;
           b.addEventListener('click', () => send(it.url));
           return b;
         }),
@@ -95,6 +106,25 @@
     ui.style.left = `${Math.max(4, r.left + 10)}px`;
     ui.style.top = `${Math.max(4, r.top + 10)}px`;
     ui.style.display = 'block';
+  }
+
+  // A name for the file made from the page: its heading, plus the season and episode picked in the page.
+  function pageTitle() {
+    const text = (el) => el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+    const meta = document.querySelector('meta[property="og:title"],meta[name="og:title"]')?.content?.trim() ?? '';
+    const heading = text(document.querySelector('h1'));
+    const base = [heading, meta, document.title].find((t) => t.length > 3 && t.length < 160) ?? document.title;
+    const picked = [...document.querySelectorAll('select')]
+      .map((s) => text(s.selectedOptions?.[0]))
+      .filter((t) => t && t.length < 40 && /saison|season|[ée]pisode|\bs\d+|\be\d+/i.test(t) && !base.toLowerCase().includes(t.toLowerCase()));
+    return [base, ...picked].join(' - ');
+  }
+  if (window === window.top) {
+    api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+      if (msg?.type !== 'pageTitle') return undefined;
+      sendResponse({ title: pageTitle() });
+      return undefined;
+    });
   }
 
   let hideTimer = null;

@@ -196,7 +196,7 @@ function describe(details) {
   if (!isHls && size && size < MIN_FILE_BYTES) return null;
 
   const ext = (/\.([a-z0-9]{2,4})$/i.exec(path)?.[1] ?? (mime.split('/')[1] || 'mp4')).toLowerCase();
-  return { url, kind: isHls ? 'hls' : 'file', mime, size, ext: isHls ? 'm3u8' : ext, at: Date.now() };
+  return { url, kind: isHls ? 'hls' : 'file', mime, size, ext: isHls ? 'm3u8' : ext, frameId: details.frameId, at: Date.now() };
 }
 
 // Pages where yt-dlp finds the streams itself (the raw network requests would be useless chunks).
@@ -224,6 +224,35 @@ async function writeList(tabId, list) {
   }
 }
 
+/** What a master playlist offers, to tell streams apart: best height, audio languages, length in seconds. */
+async function describeMaster(text, base) {
+  const lines = text.split(/\r?\n/);
+  const langs = new Set();
+  let height = 0;
+  let variant = null;
+  lines.forEach((l, i) => {
+    if (l.startsWith('#EXT-X-MEDIA') && /TYPE=AUDIO/.test(l)) {
+      const name = /NAME="([^"]*)"/.exec(l)?.[1] || /LANGUAGE="([^"]*)"/.exec(l)?.[1];
+      if (name) langs.add(name);
+    } else if (l.startsWith('#EXT-X-STREAM-INF')) {
+      height = Math.max(height, Number(/RESOLUTION=\d+x(\d+)/.exec(l)?.[1]) || 0);
+      const next = lines[i + 1]?.trim();
+      if (!variant && next && !next.startsWith('#')) variant = next;
+    }
+  });
+  let duration = 0;
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 4000);
+    const body = await (await fetch(new URL(variant, base).href, { signal: ctl.signal })).text();
+    clearTimeout(timer);
+    for (const m of body.matchAll(/#EXTINF:([\d.]+)/g)) duration += Number(m[1]);
+  } catch {
+    // no length: the entry just shows less
+  }
+  return { height, langs: [...langs], duration: Math.round(duration) };
+}
+
 let chain = Promise.resolve(); // serialises read-modify-write on the per-tab lists
 chrome.webRequest.onResponseStarted.addListener(
   (details) => {
@@ -239,6 +268,7 @@ chrome.webRequest.onResponseStarted.addListener(
           const text = await (await fetch(item.url)).text();
           item.master = text.includes('#EXT-X-STREAM-INF');
           item.live = !item.master && !text.includes('#EXT-X-ENDLIST');
+          if (item.master) Object.assign(item, await describeMaster(text, item.url));
         } catch {
           item.master = false;
         }
@@ -250,6 +280,11 @@ chrome.webRequest.onResponseStarted.addListener(
         if (item.master) list = list.filter((x) => !(x.kind === 'hls' && !x.master));
         else if (list.some((x) => x.kind === 'hls' && x.master)) return undefined;
       }
+      // The same video announced again under another address (new token, other CDN host) is one entry.
+      if (item.master && item.duration) {
+        const sig = (x) => `${x.duration}|${x.height}|${(x.langs ?? []).join(',')}`;
+        list = list.filter((x) => !(x.master && x.url !== item.url && sig(x) === sig(item)));
+      }
       const known = list.find((x) => x.url === item.url);
       if (known) {
         known.size = Math.max(known.size, item.size);
@@ -260,6 +295,19 @@ chrome.webRequest.onResponseStarted.addListener(
   },
   { urls: ['http://*/*', 'https://*/*'], types: ['media', 'xmlhttprequest', 'other'] },
   ['responseHeaders'],
+);
+
+// A player frame that loads another page (a different language or host on the same site) drops what it served before.
+chrome.webRequest.onBeforeRequest.addListener(
+  (details) => {
+    if (details.tabId < 0) return;
+    chain = chain.then(async () => {
+      const list = await readList(details.tabId);
+      const kept = list.filter((x) => x.frameId !== details.frameId);
+      if (kept.length !== list.length) await writeList(details.tabId, kept);
+    });
+  },
+  { urls: ['http://*/*', 'https://*/*'], types: ['sub_frame'] },
 );
 
 // A new page in the same tab starts a fresh list.
@@ -283,7 +331,7 @@ const cleanTitle = (t) =>
     .trim()
     .slice(0, 100);
 
-async function listFor(tabId) {
+async function listFor(tabId, frameId) {
   const tab = await chrome.tabs.get(tabId).catch(() => null);
   if (tab && isVideoPage(tab.url)) {
     return [{ url: tab.url, kind: 'ytdlp', mime: '', size: 0, ext: '', at: Date.now() }];
@@ -291,7 +339,11 @@ async function listFor(tabId) {
   // Biggest first: the main video is almost always larger than ads, previews and trailers.
   // A stream playlist has no size to compare and is normally the main content, so it goes first.
   const weight = (x) => (x.kind === 'hls' ? Number.MAX_SAFE_INTEGER : x.size);
-  return [...(await readList(tabId))].sort((a, b) => weight(b) - weight(a));
+  const all = await readList(tabId);
+  // The video being pointed at lives in one frame: offer what that frame played, when it played anything.
+  const own = all.filter((x) => x.frameId === frameId);
+  // Most recent first among streams: the one just started is the one being watched.
+  return [...(own.length ? own : all)].sort((a, b) => weight(b) - weight(a) || b.at - a.at);
 }
 
 async function downloadItem(tabId, url) {
@@ -299,7 +351,11 @@ async function downloadItem(tabId, url) {
   if (!item) return false;
   const tab = await chrome.tabs.get(tabId);
   if (item.kind === 'ytdlp') return sendToApp({ url: item.url, referrer: tab.url, kind: 'ytdlp' });
-  const base = cleanTitle(tab.title);
+  const fromPage = await Promise.race([
+    chrome.tabs.sendMessage(tabId, { type: 'pageTitle' }, { frameId: 0 }).then((r) => r?.title, () => ''),
+    new Promise((resolve) => setTimeout(() => resolve(''), 1500)),
+  ]);
+  const base = cleanTitle(fromPage || tab.title);
   return sendToApp({
     url: item.url,
     referrer: tab.url,
@@ -313,7 +369,7 @@ async function downloadItem(tabId, url) {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const tabId = msg.tabId ?? sender.tab?.id;
   (async () => {
-    if (msg.type === 'list') return { items: await listFor(tabId) };
+    if (msg.type === 'list') return { items: await listFor(tabId, sender.frameId) };
     if (msg.type === 'download') return { ok: await downloadItem(tabId, msg.url) };
     if (msg.type === 'poll') {
       await pollRefresh();
