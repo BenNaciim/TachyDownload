@@ -37,7 +37,9 @@ body.confirm { margin: 0; background: var(--panel); color: var(--ink); overflow:
 .confirm fieldset[hidden], .confirm [hidden] { display: none; }
 .confirm legend { font-size: 12px; font-weight: 600; color: var(--ink-2); padding: 0 6px; }
 .confirm fieldset .muted { margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.confirm .yt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.confirm fieldset { min-width: 0; }
+.confirm .yt-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 12px; }
+.confirm .yt-grid label { min-width: 0; }
 .confirm select {
   width: 100%; box-sizing: border-box; margin-top: 5px; background: var(--bg); border: 1px solid var(--line);
   border-radius: 9px; padding: 8px 10px; color: var(--ink);
