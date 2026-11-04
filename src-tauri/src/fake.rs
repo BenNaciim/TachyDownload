@@ -60,14 +60,19 @@ fn settings() -> Value {
     })
 }
 
+/// `TACHY_FAKE_IDLE=1`: no downloads and no updates, the state the idle measurements compare against (§7.3).
+fn idle() -> bool {
+    std::env::var_os("TACHY_FAKE_IDLE").is_some()
+}
+
 #[tauri::command]
 pub fn dm_list() -> Vec<Value> {
-    vec![stalled(1), plain(), done()]
+    if idle() { Vec::new() } else { vec![stalled(1), plain(), done()] }
 }
 
 #[tauri::command]
 pub fn dm_state() -> Value {
-    json!({ "settings": settings(), "port": 6800, "version": "2.0.0-m0", "update": null, "token": "x", "glass": false })
+    json!({ "settings": settings(), "port": 6800, "version": "2.0.0-m0", "update": null, "token": "x", "glass": true })
 }
 
 #[tauri::command]
@@ -107,6 +112,9 @@ pub fn dm_redownload(_id: String) -> Result<(), String> {
 }
 
 pub fn start_ticker(app: AppHandle) {
+    if idle() {
+        return;
+    }
     std::thread::spawn(move || {
         loop {
             std::thread::sleep(std::time::Duration::from_millis(250));

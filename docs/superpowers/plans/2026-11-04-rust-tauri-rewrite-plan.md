@@ -34,8 +34,10 @@ npm run dist                             # installeur Electron 1.x (référence 
 - [x] Fenêtre Tauri qui affiche l'interface avec un faux noyau (capture CDP : liste, graphique, événements `dm:update`)
 - [x] S0 référence 1.2.0 : installeur 107,7 Mio, RAM au repos 205,4 Mio, démarrage 623 ms, banc Node (conception §10.4)
 - [x] S2 HTTP/1.1 Range : GO (8 connexions : 1 979 Mo/s contre 306 pour Node, 2,6× moins de CPU) · S3 `safeStorage` `v10` : GO · S5 icônes : GO
-- [ ] S1 verre (acrylique) · S4 installeur (installation, mise à jour, désinstallation) · S5 clic sur notification
-- [x] Document de parité créé (`../specs/2026-11-04-rust-tauri-rewrite-parity.md`) ; résultats déjà consignés en §10.4 pour S0, S2, S3, S5 (icônes)
+- [x] S1 verre : GO avec `--disable-gpu-compositing` (défaut WebView2 156 sinon) · S4 installeur : GO (1,83 Mio ; installation, mise à jour `/UPDATE /R` avec relance, désinstallation) · S5 notification : demi-GO (API `on_activated` présente, clic réel à vérifier à la main en M5, repli sans clic)
+- [x] Mesure Tauri release (faux noyau, au repos) : 122 Mio, 516 ms, 5,3 % CPU contre Electron 196 Mio, 607 ms, 2,2 % (conception §10.4)
+- [x] Document de parité créé (`../specs/2026-11-04-rust-tauri-rewrite-parity.md`) ; résultats consignés en §10.4 pour S0 à S5
+- [ ] Pousser la branche (fin de jalon) puis rapport M0
 
 ### M1 Noyau (`crates/tachy-core`)
 
@@ -57,4 +59,6 @@ Détail par jalon dans la conception §8. Les cases seront dépliées ici au dé
 ## Journal
 
 - 2026-11-04 : conception validée ; autorisation donnée de tout faire sans s'arrêter (installeur d'essai compris). M0 étapes 1 et 2 faites (`be9ffc1`).
+- 2026-11-04 : S1 : le compositeur GPU de WebView2 156 (portable à deux GPU) laisse des couches `backdrop-filter` à moitié peintes après un changement de style en direct ; contournements côté interface sans effet, `--disable-gpu-compositing` règle tout (RAM au repos 122 Mio au lieu de 223, CPU au repos 5,3 % au lieu de 0,8 %). À refaire avec le vrai noyau en M7.
+- 2026-11-04 : un `cargo build --release` est resté bloqué 47 min (rustc quasi inactif) : tuer l'arbre de processus et relancer suffit (2 min).
 - 2026-11-04 : `rust-toolchain.toml` épingle `1.99.1` (rustup télécharge la chaîne au premier appel). `.cargo/config.toml` : `+crt-static`. Icônes lues depuis `build/` pour l'instant (déplacées en M7).
