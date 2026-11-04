@@ -9,6 +9,7 @@ mod events;
 mod icons;
 mod menu;
 mod notify;
+mod secrets;
 mod shell;
 mod tray;
 mod update;
@@ -193,11 +194,18 @@ fn start(app: &AppHandle, dir: PathBuf, hidden: bool) -> Result<(), Box<dyn std:
 
     let tools = Arc::new(Tools::new(dir.join("tools")));
     let finder = tools.clone();
+    // Site logins are encrypted with the Windows account and never leave this process but as request headers.
+    let logins = Arc::new(tachy_core::logins::Logins::new(
+        &dir.join("logins.json"),
+        Arc::new(secrets::Dpapi::new(dir.join("Local State"))),
+    ));
+    let for_sites = logins.clone();
     let manager = tauri::async_runtime::block_on(async {
         let manager = Manager::new(ManagerConfig {
             store_path: Some(dir.join("downloads.json")),
             settings: json!({ "dir": downloads, "categories": true }),
             tools: Some(Arc::new(move |name| finder.find(name))),
+            site_auth: Some(Arc::new(move |url| for_sites.headers_for(url))),
             ..ManagerConfig::default()
         });
         manager.load();
@@ -210,6 +218,7 @@ fn start(app: &AppHandle, dir: PathBuf, hidden: bool) -> Result<(), Box<dyn std:
     app.manage(Shell {
         manager: manager.clone(),
         tools: tools.clone(),
+        logins,
         token: token.clone(),
         port: AtomicU16::new(0),
         data_dir: dir,

@@ -282,21 +282,46 @@ pub async fn dm_copy_diagnostic(app: AppHandle) -> Res<()> {
     crate::menu::copy_diagnostic(&app)
 }
 
-// Site logins arrive with the data migration (milestone 5).
+// ---- site logins: the secret goes in and never comes back ---------------------------------------------------
 
-#[tauri::command]
-pub async fn dm_logins_list() -> Res<Vec<Value>> {
-    Ok(Vec::new())
+fn clip(entry: &Value, key: &str, max: usize) -> String {
+    entry[key]
+        .as_str()
+        .unwrap_or("")
+        .chars()
+        .take(max)
+        .collect()
 }
 
 #[tauri::command]
-pub async fn dm_logins_save(_entry: Value) -> Res<Value> {
-    Err("Les identifiants de site ne sont pas encore disponibles".into())
+pub async fn dm_logins_list(shell: State<'_, Shell>) -> Res<Vec<Value>> {
+    Ok(listed(shell.logins.list()))
 }
 
 #[tauri::command]
-pub async fn dm_logins_remove(_host: String) -> Res<Vec<Value>> {
-    Ok(Vec::new())
+pub async fn dm_logins_save(shell: State<'_, Shell>, entry: Value) -> Res<Vec<Value>> {
+    let list = shell.logins.save(
+        &clip(&entry, "host", 300),
+        &clip(&entry, "type", 20),
+        &clip(&entry, "user", 300),
+        &clip(&entry, "secret", 4200),
+    )?;
+    Ok(listed(list))
+}
+
+#[tauri::command]
+pub async fn dm_logins_remove(shell: State<'_, Shell>, host: String) -> Res<Vec<Value>> {
+    Ok(listed(
+        shell
+            .logins
+            .remove(&host.chars().take(300).collect::<String>())?,
+    ))
+}
+
+fn listed(list: Vec<tachy_core::logins::Listed>) -> Vec<Value> {
+    list.into_iter()
+        .map(|l| serde_json::to_value(l).unwrap_or(Value::Null))
+        .collect()
 }
 
 // ---- the "Download this?" window ----------------------------------------------------------------------------

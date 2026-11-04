@@ -27,6 +27,7 @@ pub struct Confirm {
 pub struct Shell {
     pub manager: Manager,
     pub tools: std::sync::Arc<Tools>,
+    pub logins: std::sync::Arc<tachy_core::logins::Logins>,
     pub token: String,
     pub port: AtomicU16,
     pub data_dir: PathBuf,

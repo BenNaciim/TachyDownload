@@ -4132,6 +4132,7 @@ name = "tachy-core"
 version = "2.0.0"
 dependencies = [
  "aes",
+ "base64 0.23.1",
  "cbc",
  "chrono",
  "futures-util",
@@ -4151,6 +4152,7 @@ dependencies = [
 name = "tachy-download"
 version = "2.0.0"
 dependencies = [
+ "aes-gcm",
  "base64 0.23.1",
  "png 0.18.1",
  "serde",

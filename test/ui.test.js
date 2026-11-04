@@ -140,8 +140,8 @@ test('network and after-download settings are saved, and site logins are kept ap
   }
 });
 
-// Milestone 5 brings the site logins (encrypted with the Windows account); until then they are not available.
-test('site logins are kept apart from the form and the secret never comes back', { skip: 'site logins arrive in milestone 5', timeout: 120000 }, async () => {
+// Site logins are encrypted with the Windows account (DPAPI) and only ever go back out as request headers.
+test('site logins are kept apart from the form and the secret never comes back', { skip, timeout: 120000 }, async () => {
   const ui = await launch();
   try {
     // logins: Enter adds one without submitting the settings form, and the secret never comes back

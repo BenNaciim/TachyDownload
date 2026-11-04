@@ -13,6 +13,7 @@ pub mod errors;
 pub mod filetypes;
 pub mod fsutil;
 pub mod limiter;
+pub mod logins;
 pub mod manager;
 pub mod menu;
 pub mod net;
