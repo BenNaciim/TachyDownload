@@ -12,7 +12,7 @@ use crate::state::{Kind, Segment, Snapshot, Status, TaskState, UNKNOWN_END};
 use crate::util::unique_path;
 use std::collections::{HashSet, VecDeque};
 use std::fs::File;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Notify;
@@ -20,6 +20,7 @@ use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::sync::CancellationToken;
 
 mod hls;
+mod ytdlp;
 
 pub const MIN_SEGMENT: u64 = 1024 * 1024;
 /// Only a segment with more than this left is worth splitting.
@@ -368,9 +369,7 @@ impl Task {
         match kind {
             Kind::File => self.run_http(cancel).await,
             Kind::Hls => self.run_hls(cancel).await,
-            Kind::Ytdlp => Err(Fail::Error(TaskError::fatal(
-                "Ce type de téléchargement n’est pas encore pris en charge",
-            ))),
+            Kind::Ytdlp => self.run_ytdlp(cancel).await,
         }
     }
 

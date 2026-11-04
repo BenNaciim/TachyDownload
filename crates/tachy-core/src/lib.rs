@@ -21,5 +21,6 @@ pub mod settings;
 pub mod state;
 pub mod store;
 pub mod task;
+pub mod tools;
 pub mod util;
 pub mod video;

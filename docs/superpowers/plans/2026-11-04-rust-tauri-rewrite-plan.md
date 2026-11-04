@@ -60,12 +60,22 @@ Ordre (chaque module : tests JS portés d'abord, puis code) :
 - [x] `tests/hls.rs` (7 tests portés + 4 unitaires) ; contrat d'instantané HLS identique au JS (exemption retirée de `contract.rs`)
 - [x] Vidéo réelle de bout en bout : flux Apple bipbop (100 segments, 598 Mo, 18,7 s) ; conversion mp4 avec le vrai ffmpeg sur un flux généré (`tests/hls_real.rs`, `--ignored`)
 
-### M3 Vidéos · M4 Coque · M5 Données et mise à jour · M6 Installeur · M7 Livraison
+### M3 Vidéos (`video.rs`, `task/ytdlp.rs`, `tools.rs`)
+
+- [x] `video` : détection des pages et des playlists, `clean_yt_opts`, `format_args`, `header_args`, `ytdlp_args`, `apply_progress`, `explain`, `format_diag`, `find_by_video_id`, `direct_file`, `summarize_probe`, `probe_video`, `list_playlist`
+- [x] `task/ytdlp` : processus yt-dlp (sortie UTF-8, arbre tué à l'arrêt), progression, fichier annoncé retrouvé par l'identifiant, diagnostic `ytdlp-last.log`, raccourci du fichier simple par le moteur multi-connexions, « refaire » sur place
+- [x] `tools` : chemin (copie propre puis PATH), installation avec SHA-256 vérifié (liste de sommes, zip par `tar.exe`), mise à jour de yt-dlp au plus une fois par 20 h
+- [x] `Manager::add_playlist`, `ManagerConfig::{tools, ytdlp_launch}`
+- [x] Tests : `tests/ytdlp.rs` (19, avec un faux yt-dlp en Node), `tests/replay.rs` (5), `tests/tools.rs` (8), unitaires `video` (31) ; exemption des textes vidéo retirée de `contract.rs`
+- [x] Vraie vidéo de bout en bout (`tests/ytdlp_real.rs`, `--ignored`) : sondage et téléchargement 360p d'une vidéo YouTube publique avec le vrai yt-dlp 2026.10.26, deno et ffmpeg
+
+### M4 Coque · M5 Données et mise à jour · M6 Installeur · M7 Livraison
 
 Détail par jalon dans la conception §8. Les cases seront dépliées ici au début de chaque jalon.
 
 ## Journal
 
+- 2026-11-04 : M3 : la vidéo « Me at the zoo » (jNQXAC9IJ2w) est devenue indisponible côté YouTube (« This video is unavailable »), le test réel utilise une autre vidéo publique. Un test réel a montré le bon enchaînement complet (arguments, diagnostic, message français). Les tests qui lancent le faux yt-dlp passent l'environnement par `YtdlpLaunch` et non par `set_var` : les tests Rust tournent en parallèle dans un même processus.
 - 2026-11-04 : conception validée ; autorisation donnée de tout faire sans s'arrêter (installeur d'essai compris). M0 étapes 1 et 2 faites (`be9ffc1`).
 - 2026-11-04 : S1 : le compositeur GPU de WebView2 156 (portable à deux GPU) laisse des couches `backdrop-filter` à moitié peintes après un changement de style en direct ; contournements côté interface sans effet, `--disable-gpu-compositing` règle tout (RAM au repos 122 Mio au lieu de 223, CPU au repos 5,3 % au lieu de 0,8 %). À refaire avec le vrai noyau en M7.
 - 2026-11-04 : un `cargo build --release` est resté bloqué 47 min (rustc quasi inactif) : tuer l'arbre de processus et relancer suffit (2 min).

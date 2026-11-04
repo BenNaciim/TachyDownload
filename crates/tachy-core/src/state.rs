@@ -61,6 +61,7 @@ pub struct TaskState {
     pub dir: String,
     pub filename: String,
     pub filename_locked: bool,
+    #[serde(deserialize_with = "lenient_u64")]
     pub size: Option<u64>,
     pub range_ok: bool,
     pub segments: Option<Vec<Segment>>,
@@ -100,9 +101,9 @@ pub struct TaskState {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hls: Option<HlsProgress>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub ytd: Option<Value>,
+    pub ytd: Option<Ytd>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub frag: Option<Value>,
+    pub frag: Option<Frag>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub yt_opts: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -128,11 +129,45 @@ pub struct HlsProgress {
     pub total: u64,
 }
 
+/// What yt-dlp has fetched, in bytes: `base` is what finished streams weighed (the audio comes after the video),
+/// `cur` the stream in progress, `total` its size as far as yt-dlp knows it. Floats because yt-dlp's estimates are.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Ytd {
+    pub base: f64,
+    pub cur: f64,
+    pub total: f64,
+}
+
+/// Fragments done out of the fragments of the stream, for the details pane.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Frag {
+    pub done: u64,
+    pub total: u64,
+}
+
+/// A size the JavaScript engine may have stored as a fraction (yt-dlp's estimates): read it rounded.
+fn lenient_u64<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<u64>, D::Error> {
+    let v = Option::<Value>::deserialize(d)?;
+    Ok(v.and_then(|v| {
+        v.as_u64().or_else(|| {
+            v.as_f64()
+                .filter(|f| f.is_finite() && *f >= 0.0)
+                .map(|f| f.round() as u64)
+        })
+    }))
+}
+
 impl TaskState {
-    /// Bytes written so far, over every segment (for a stream: the bytes written in order).
+    /// Bytes written so far, over every segment (for a stream: the bytes written in order; for yt-dlp: what it
+    /// reports, unless the app fetched the plain file itself).
     pub fn downloaded(&self) -> u64 {
         if self.kind == Kind::Hls {
             return self.hls.map_or(0, |h| h.bytes);
+        }
+        if self.kind == Kind::Ytdlp && self.direct != Some(true) {
+            return self.ytd.map_or(0, |y| (y.base + y.cur).max(0.0) as u64);
         }
         self.segments
             .as_ref()
@@ -214,6 +249,39 @@ mod tests {
             },
         ]);
         assert_eq!(s.downloaded(), 50);
+    }
+
+    #[test]
+    fn a_fractional_size_written_by_the_javascript_engine_is_read_rounded() {
+        let s: TaskState = serde_json::from_value(
+            json!({ "id": "a", "kind": "ytdlp", "size": 3645288152.58, "ytd": { "base": 0, "cur": 12, "total": 3645288152.58 }, "frag": null }),
+        )
+        .unwrap();
+        assert_eq!(s.size, Some(3645288153));
+        assert_eq!(s.downloaded(), 12, "yt-dlp reports its own byte count");
+        assert!(s.frag.is_none());
+    }
+
+    #[test]
+    fn a_plain_file_fetched_for_a_video_counts_its_segments() {
+        let mut s = TaskState {
+            kind: Kind::Ytdlp,
+            direct: Some(true),
+            ytd: Some(Ytd {
+                base: 0.0,
+                cur: 999.0,
+                total: 0.0,
+            }),
+            segments: Some(vec![Segment {
+                start: 0,
+                end: 99,
+                pos: 40,
+            }]),
+            ..TaskState::default()
+        };
+        assert_eq!(s.downloaded(), 40);
+        s.direct = Some(false);
+        assert_eq!(s.downloaded(), 999);
     }
 
     #[test]

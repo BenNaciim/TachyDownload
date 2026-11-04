@@ -36,6 +36,17 @@ pub type SiteAuth = Arc<dyn Fn(&str) -> Option<Headers> + Send + Sync>;
 /// Where ffmpeg is, when the video tools are installed.
 pub type FfmpegPath = Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>;
 
+/// Where a tool is (`ytdlp`, `ffmpeg`, `deno`): our own copy first, then PATH.
+pub type ToolFinder = Arc<dyn Fn(&str) -> Option<PathBuf> + Send + Sync>;
+
+/// How yt-dlp is started. Normally nothing more than the program; the tests start a stand-in script through
+/// `node` (`prefix`) and tell it what to do through its environment (`env`).
+#[derive(Clone, Default)]
+pub struct YtdlpLaunch {
+    pub prefix: Vec<String>,
+    pub env: Vec<(String, String)>,
+}
+
 pub struct Ctx {
     pub settings: RwLock<Settings>,
     /// The limit in force (KB/s): what tasks that run other programs pass on.
@@ -46,6 +57,10 @@ pub struct Ctx {
     pub events: broadcast::Sender<Event>,
     pub dirty: Notify,
     pub ffmpeg: RwLock<Option<FfmpegPath>>,
+    pub tools: RwLock<Option<ToolFinder>>,
+    pub ytdlp_launch: RwLock<YtdlpLaunch>,
+    /// Where the diagnostic of the last yt-dlp run is written.
+    pub diag_file: RwLock<Option<PathBuf>>,
     /// HLS: bytes received out of turn that may wait in memory to be written.
     pub hls_ahead_bytes: std::sync::atomic::AtomicU64,
     /// Held while a download picks its file name and reserves it with its .part file, so two downloads of the
@@ -71,6 +86,9 @@ impl Ctx {
             events,
             dirty: Notify::new(),
             ffmpeg: RwLock::new(None),
+            tools: RwLock::new(None),
+            ytdlp_launch: RwLock::new(YtdlpLaunch::default()),
+            diag_file: RwLock::new(None),
             hls_ahead_bytes: std::sync::atomic::AtomicU64::new(128 * 1024 * 1024),
             naming: Mutex::new(()),
             tx,
@@ -84,12 +102,45 @@ impl Ctx {
             .clone()
     }
 
+    /// Path of a tool, when it is installed.
+    pub fn tool(&self, name: &str) -> Option<PathBuf> {
+        self.tools
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .and_then(|f| f(name))
+    }
+
     pub fn ffmpeg(&self) -> Option<PathBuf> {
         self.ffmpeg
             .read()
             .unwrap_or_else(|e| e.into_inner())
             .as_ref()
             .and_then(|f| f())
+            .or_else(|| self.tool("ffmpeg"))
+    }
+
+    pub fn deno(&self) -> Option<PathBuf> {
+        self.tool("deno")
+    }
+
+    /// yt-dlp as it must be started, or none when the video tools are not installed.
+    pub fn ytdlp(&self) -> Option<crate::video::YtdlpBin> {
+        Some(crate::video::YtdlpBin {
+            exe: self.tool("ytdlp")?,
+            launch: self
+                .ytdlp_launch
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone(),
+        })
+    }
+
+    pub fn diag_file(&self) -> Option<PathBuf> {
+        self.diag_file
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     pub fn net(&self) -> Net {

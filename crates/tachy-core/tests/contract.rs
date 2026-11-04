@@ -30,8 +30,6 @@ async fn settings_come_out_the_same_as_in_the_javascript_engine() {
     }
 }
 
-/// Differences that belong to a later milestone: the HLS module adds its progress fields and its single segment
-/// (M2). Delete this list when M2 lands.
 /// A field the JavaScript engine writes as `null` and the Rust one leaves out (or the reverse) reads the same in
 /// the window: both are "nothing".
 fn same_value(a: &Value, b: &Value) -> bool {
@@ -254,8 +252,6 @@ fn every_french_text_of_the_engine_exists_in_the_rust_sources() {
         .unwrap()
         .iter()
         .map(|s| s.as_str().unwrap().to_string())
-        // texts of the video side, which comes with M3 (yt-dlp, tools): remove from this list then
-        .filter(|s| !s.contains("playlist") && !s.starts_with("Outils vidéo"))
         .filter(|s| !src.contains(s.as_str()))
         .collect();
     assert!(

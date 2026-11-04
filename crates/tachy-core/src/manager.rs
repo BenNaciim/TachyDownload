@@ -30,6 +30,10 @@ pub struct ManagerConfig {
     pub site_auth: Option<SiteAuth>,
     /// HLS: how many bytes may be received ahead of the segment being waited for (128 MiB when unset).
     pub hls_ahead_bytes: Option<u64>,
+    /// Where the video tools are (yt-dlp, ffmpeg, deno).
+    pub tools: Option<crate::ctx::ToolFinder>,
+    /// How yt-dlp is started (only the tests change it, to run a stand-in script).
+    pub ytdlp_launch: Option<crate::ctx::YtdlpLaunch>,
 }
 
 impl Default for ManagerConfig {
@@ -41,6 +45,8 @@ impl Default for ManagerConfig {
             retry_delays: RETRY_DELAYS.to_vec(),
             site_auth: None,
             hls_ahead_bytes: None,
+            tools: None,
+            ytdlp_launch: None,
         }
     }
 }
@@ -142,6 +148,15 @@ impl Manager {
             ctx.hls_ahead_bytes
                 .store(n, std::sync::atomic::Ordering::Relaxed);
         }
+        *ctx.tools.write().unwrap_or_else(|e| e.into_inner()) = cfg.tools;
+        if let Some(l) = cfg.ytdlp_launch {
+            *ctx.ytdlp_launch.write().unwrap_or_else(|e| e.into_inner()) = l;
+        }
+        *ctx.diag_file.write().unwrap_or_else(|e| e.into_inner()) = cfg
+            .store_path
+            .as_ref()
+            .and_then(|p| p.parent())
+            .map(|d| d.join("ytdlp-last.log"));
         let m = Manager {
             inner: Arc::new(Inner {
                 ctx,
@@ -171,6 +186,26 @@ impl Manager {
             .ffmpeg
             .write()
             .unwrap_or_else(|e| e.into_inner()) = Some(f);
+    }
+
+    /// Tells the downloads where the video tools are (they appear once installed).
+    pub fn set_tools(&self, f: crate::ctx::ToolFinder) {
+        *self
+            .inner
+            .ctx
+            .tools
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = Some(f);
+    }
+
+    /// Changes how yt-dlp is started (the tests run a stand-in script).
+    pub fn set_ytdlp_launch(&self, l: crate::ctx::YtdlpLaunch) {
+        *self
+            .inner
+            .ctx
+            .ytdlp_launch
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = l;
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
@@ -447,7 +482,7 @@ impl Manager {
             });
         state.filename = sanitize_filename(&wanted);
         if kind == Kind::Ytdlp {
-            state.yt_opts = opts.yt_opts.clone();
+            state.yt_opts = opts.yt_opts.as_ref().and_then(crate::video::clean_yt_opts);
             // A manifest the extension found has no title of its own ("manifest"): the file takes the name of the page.
             if opts.sniffed
                 && let Some(f) = opts.filename.as_deref().filter(|f| !f.is_empty())
@@ -468,6 +503,43 @@ impl Manager {
         task.emit();
         self.pump();
         Ok(task.snapshot())
+    }
+
+    /// Adds every video of a YouTube playlist, in its own folder named after the playlist.
+    pub async fn add_playlist(&self, url: &str, opts: &AddOpts) -> Result<Vec<Snapshot>, String> {
+        let Some(yt) = self.inner.ctx.ytdlp() else {
+            return Err("Outils vidéo non installés : ouvrez Paramètres → Vidéos".into());
+        };
+        let settings = self.settings();
+        let list =
+            crate::video::list_playlist(&yt, &validate_url(url)?, 200, &settings.proxy).await?;
+        if list.items.is_empty() {
+            return Err("Cette playlist est vide ou privée".into());
+        }
+        let base = opts
+            .dir
+            .clone()
+            .filter(|d| !d.is_empty())
+            .unwrap_or(settings.dir);
+        let dir = Path::new(&base)
+            .join(sanitize_filename(&list.title))
+            .to_string_lossy()
+            .into_owned();
+        list.items
+            .iter()
+            .map(|it| {
+                self.add(
+                    &it.url,
+                    &AddOpts {
+                        kind: Some("ytdlp".into()),
+                        dir: Some(dir.clone()),
+                        filename: (!it.title.is_empty()).then(|| format!("{}.mp4", it.title)),
+                        own_folder: true,
+                        ..opts.clone()
+                    },
+                )
+            })
+            .collect()
     }
 
     /// Two unfinished downloads must never share a .part file, so a repeated name gets a suffix.
