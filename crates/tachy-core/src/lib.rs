@@ -16,6 +16,7 @@ pub mod limiter;
 pub mod manager;
 pub mod menu;
 pub mod net;
+pub mod postprocess;
 pub mod probe;
 pub mod progress;
 pub mod rules;

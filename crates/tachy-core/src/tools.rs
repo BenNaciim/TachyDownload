@@ -439,12 +439,7 @@ fn expected_hash(sums: &str, src: &Source) -> Option<String> {
 /// Unpacks a zip with the tar that Windows ships, by its full path: a GNU tar earlier on PATH (Git for Windows)
 /// reads "C:\..." as a remote host.
 async fn extract_zip(zip: &Path, to: &Path) -> Result<(), String> {
-    #[cfg(windows)]
-    let tar = PathBuf::from(std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into()))
-        .join("System32")
-        .join("tar.exe");
-    #[cfg(not(windows))]
-    let tar = PathBuf::from("tar");
+    let tar = crate::postprocess::system_tar();
     let mut cmd = tokio::process::Command::new(tar);
     cmd.arg("-xf")
         .arg(zip)

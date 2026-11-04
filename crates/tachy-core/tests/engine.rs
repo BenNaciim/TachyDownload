@@ -320,3 +320,70 @@ async fn add_with_paused_waits_in_the_list_instead_of_starting() {
     .await;
     m.shutdown().await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn finished_downloads_can_be_taken_off_the_list_in_one_go_their_files_stay() {
+    let srv = start_server(random_body(40 * 1024), Opts::default()).await;
+    let dir = tmp_dir();
+    let m = make_manager(&dir, json!({ "categories": false }));
+    let name = |n: &str| AddOpts {
+        filename: Some(n.into()),
+        ..AddOpts::default()
+    };
+    let a = m.add(&srv.url, &name("a.bin")).unwrap().state.id;
+    let b = m.add(&srv.url, &name("b.bin")).unwrap().state.id;
+    finished(&m, &a).await;
+    finished(&m, &b).await;
+    let c = m
+        .add(
+            &srv.url,
+            &AddOpts {
+                paused: true,
+                ..name("c.bin")
+            },
+        )
+        .unwrap()
+        .state
+        .id;
+    assert_eq!(m.clear_completed().await, 2);
+    let left: Vec<String> = m.list().into_iter().map(|t| t.state.id).collect();
+    assert_eq!(left, vec![c], "only the unfinished one stays");
+    assert!(dir.join("a.bin").exists() && dir.join("b.bin").exists());
+    m.shutdown().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn pausing_shows_at_once_and_resuming_right_after_still_finishes_the_file() {
+    let body = random_body(600 * 1024);
+    let srv = start_server(
+        body.clone(),
+        Opts {
+            bytes_per_sec: 300 * 1024,
+            ..Opts::default()
+        },
+    )
+    .await;
+    let dir = tmp_dir();
+    let m = make_manager(&dir, json!({}));
+    let id = m.add(&srv.url, &AddOpts::default()).unwrap().state.id;
+    wait_for("downloading", 15000, || {
+        snap(&m, &id).state.status == Status::Downloading
+    })
+    .await;
+    let pausing = {
+        let (m, id) = (m.clone(), id.clone());
+        tokio::spawn(async move { m.pause(&id).await })
+    };
+    wait_for("paused is shown", 2000, || {
+        snap(&m, &id).state.status == Status::Paused
+    })
+    .await;
+    m.resume(&id).unwrap();
+    pausing.await.unwrap().unwrap();
+    wait_for("completed", 30000, || {
+        snap(&m, &id).state.status == Status::Completed
+    })
+    .await;
+    assert_eq!(std::fs::read(dir.join("sample.bin")).unwrap(), body);
+    m.shutdown().await;
+}

@@ -407,8 +407,62 @@ impl Manager {
     fn on_settled(&self, id: &str) {
         if let Some(t) = self.task(id) {
             self.plan_retry(&t);
+            let me = self.clone();
+            tokio::spawn(async move { me.after_complete(t).await });
         }
         self.pump();
+    }
+
+    /// Once a download is finished: warn about a copy of a file already received, and unpack archives.
+    async fn after_complete(&self, t: Arc<Task>) {
+        let (file, name) = {
+            let mut s = lock(&t.state);
+            if s.status != Status::Completed || s.post_done == Some(true) {
+                return;
+            }
+            s.post_done = Some(true);
+            (PathBuf::from(&s.dir).join(&s.filename), s.filename.clone())
+        };
+        if !file.exists() {
+            return;
+        }
+        let settings = self.settings();
+        if settings.duplicates {
+            let others: Vec<PathBuf> = self
+                .all()
+                .into_iter()
+                .filter(|o| !Arc::ptr_eq(o, &t) && o.status() == Status::Completed)
+                .map(|o| {
+                    let s = lock(&o.state);
+                    PathBuf::from(&s.dir).join(&s.filename)
+                })
+                .collect();
+            let mine = file.clone();
+            let twin = tokio::task::spawn_blocking(move || {
+                crate::postprocess::find_duplicate(&mine, &others)
+            })
+            .await
+            .ok()
+            .flatten();
+            if let Some(twin) = twin {
+                lock(&t.state).duplicate_of = Some(twin.to_string_lossy().into_owned());
+                t.emit();
+            }
+        }
+        if settings.auto_extract && crate::postprocess::is_archive(&name) {
+            lock(&t.state).extracting = Some(true);
+            t.emit();
+            let result = crate::postprocess::extract_archive(&file, None).await;
+            {
+                let mut s = lock(&t.state);
+                match result {
+                    Ok(dest) => s.extracted_to = Some(dest.to_string_lossy().into_owned()),
+                    Err(e) => s.extract_error = Some(e),
+                }
+                s.extracting = Some(false);
+            }
+            t.emit();
+        }
     }
 
     // ---- adding and changing downloads -------------------------------------------------------------------
