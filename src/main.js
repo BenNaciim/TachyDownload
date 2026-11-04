@@ -396,7 +396,7 @@ function createWindow() {
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
-  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  win.loadFile(path.join(__dirname, '..', 'ui', 'renderer', 'index.html'));
   // The close button keeps downloads running in the notification area (unless turned off).
   win.on('close', (e) => {
     if (!app.isQuitting && manager?.settings.closeToTray && tray) {
@@ -458,7 +458,7 @@ function askAboutDownload(req) {
     w.focus();
   });
   w.on('closed', () => confirms.delete(id)); // closing without answering cancels
-  w.loadFile(path.join(__dirname, 'renderer', 'confirm.html'));
+  w.loadFile(path.join(__dirname, '..', 'ui', 'renderer', 'confirm.html'));
   return true;
 }
 

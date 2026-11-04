@@ -2,7 +2,7 @@
 
 const path = require('node:path');
 const fs = require('node:fs');
-const { typeOf, OTHER_FOLDER } = require('../shared/filetypes');
+const { typeOf, OTHER_FOLDER } = require('../../ui/shared/filetypes');
 
 const RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
 

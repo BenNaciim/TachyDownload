@@ -25,12 +25,12 @@ module.exports = [
     },
   },
   {
-    files: ['src/renderer/*.js'],
+    files: ['ui/renderer/*.js'],
     languageOptions: { sourceType: 'script', globals: { ...globals.browser, ...shared } },
     rules: { 'no-unused-vars': 'off', 'no-redeclare': 'off' }, // names are used by the sibling scripts
   },
   {
-    files: ['src/shared/*.js'],
+    files: ['ui/shared/*.js'],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
   {

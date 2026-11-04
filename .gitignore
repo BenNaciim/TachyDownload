@@ -2,3 +2,8 @@ node_modules/
 dist/
 *.part
 *.log
+
+# Rust
+/target/
+/src-tauri/gen/
+/src-tauri/target/

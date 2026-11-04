@@ -70,7 +70,8 @@ The app listens on `127.0.0.1` only (port 6800, then 6801… if busy). Three che
 ```
 src/engine/   engine (no Electron dependency): download, hls, ytdlp, manager, tools, probe
 src/server.js local API for the extension
-src/main.js   Electron main process; preload.js IPC bridge; renderer/ user interface
+src/main.js   Electron main process; preload.js IPC bridge
+ui/           user interface (renderer/ pages and scripts, shared/ file-type table)
 extension/    MV3 extension (Chrome, Edge, Firefox)
 test/         node:test suite (local HTTP server with Range)
 ```

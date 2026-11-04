@@ -66,7 +66,8 @@ L'application écoute uniquement sur `127.0.0.1` (port 6800, puis 6801… si occ
 ```
 src/engine/   moteur (sans dépendance Electron) : download, hls, ytdlp, manager, tools, probe
 src/server.js API locale pour l'extension
-src/main.js   processus principal Electron ; preload.js pont IPC ; renderer/ interface
+src/main.js   processus principal Electron ; preload.js pont IPC
+ui/           interface (renderer/ pages et scripts, shared/ table des types de fichiers)
 extension/    extension MV3 (Chrome, Edge, Firefox)
 test/         tests node:test (serveur HTTP local avec Range)
 ```

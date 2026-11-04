@@ -41,6 +41,7 @@
     },
     "files": [
       "src/**/*",
+      "ui/**/*",
       "build/icon.png",
       "package.json"
     ],
