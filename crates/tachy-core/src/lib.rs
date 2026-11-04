@@ -27,5 +27,6 @@ pub mod state;
 pub mod store;
 pub mod task;
 pub mod tools;
+pub mod updater;
 pub mod util;
 pub mod video;

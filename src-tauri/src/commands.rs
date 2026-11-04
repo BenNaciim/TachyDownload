@@ -43,7 +43,8 @@ pub async fn dm_state(shell: State<'_, Shell>) -> Res<Value> {
         .pending_update
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .clone();
+        .as_ref()
+        .map(crate::update::summary);
     Ok(json!({
         "settings": shell.manager.settings(),
         "port": shell.port.load(std::sync::atomic::Ordering::Relaxed),
@@ -170,13 +171,19 @@ pub async fn dm_file_icon(shell: State<'_, Shell>, id: String) -> Res<Option<Str
 
 #[tauri::command]
 pub async fn dm_update_check(app: AppHandle, shell: State<'_, Shell>) -> Res<Value> {
-    let found = crate::update::look_for_update(&app).await?;
-    Ok(json!({ "current": shell.version, "update": found }))
+    crate::update::look_for_update(&app).await?;
+    let update = shell
+        .pending_update
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .map(crate::update::summary);
+    Ok(json!({ "current": shell.version, "update": update }))
 }
 
 #[tauri::command]
-pub async fn dm_update_install() -> Res<()> {
-    Err("Aucune mise à jour à installer".into())
+pub async fn dm_update_install(app: AppHandle) -> Res<()> {
+    crate::update::install(&app).await
 }
 
 #[tauri::command]

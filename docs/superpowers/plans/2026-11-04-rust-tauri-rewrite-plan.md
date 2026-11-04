@@ -76,7 +76,16 @@ Ordre (chaque module : tests JS portés d'abord, puis code) :
 - [x] `test/ui.test.js` et `test/shell.test.js` pilotent le binaire Tauri (CDP + `test/win.ps1` pour le menu natif) ; l'interface actuelle fonctionne telle quelle avec le vrai noyau
 - [ ] À vérifier à la main (M5) : clic réel sur un toast, infobulle et progression de la barre des tâches à l'œil, connexion/identifiants de site (M5)
 
-### M5 Données et mise à jour · M6 Installeur · M7 Livraison
+### M5 Données et mise à jour (`postprocess.rs`, `logins.rs`, `updater.rs`, `src-tauri/src/{secrets,update}.rs`)
+
+- [x] `postprocess` : doublons (taille puis SHA-256), extraction des archives avec le tar du système (dossier « nom (1) » si pris, dossier à moitié fait supprimé), branché sur `Manager::on_settled` ; tests `afterdownload.rs`
+- [x] Deux tests de l'ancien `shell.test.js` portés dans `engine.rs` (vider les terminés, pause affichée aussitôt puis reprise)
+- [x] `logins` : port de `logins.js` derrière un trait `Crypt` (mêmes messages français), reprise des entrées `v10` d'Electron avec copie `logins.json.electron.bak` ; coque : DPAPI (`secrets.rs`) + lecture de `Local State` ; commandes `dm_logins_*` ; le test d'interface des identifiants n'est plus ignoré
+- [x] `updater` : port de `updater.js` (version, release GitHub, `digest` sha256, hôtes autorisés, `.part` supprimé en cas d'échec) ; coque : bandeau (`dm:updateAvail`/`dm:updateProgress`), installeur lancé détaché avec `/S /UPDATE /R` puis sortie, contrôle auto 45 s puis 12 h hors build de développement
+- [x] Préférences d'interface (§6.3) : **remises à zéro une fois**, pas de dernière 1.x qui exporte (l'Electron installée est supprimée, aucune 1.x ne sera publiée)
+- [ ] À vérifier à la main : clic réel sur un toast, infobulle et progression de la barre des tâches ; la chaîne de mise à jour réelle ne se prouve qu'avec deux releases publiées (essai de l'installeur en M6, sans mise à jour réelle)
+
+### M6 Installeur · M7 Livraison
 
 Détail par jalon dans la conception §8. Les cases seront dépliées ici au début de chaque jalon.
 
@@ -89,3 +98,4 @@ Détail par jalon dans la conception §8. Les cases seront dépliées ici au dé
 - 2026-11-04 : M1 : le vrai noyau fait aussi bien que le spike S2 (1 974 Mo/s à 8 connexions, 1 813 à 16). Une course trouvée par `queue_respects_max_concurrent` : deux téléchargements du même nom choisissaient le même `.part` ; le nom est maintenant pris et réservé sous un verrou (`Ctx::naming`). Le JS avait la même fenêtre mais s'en sortait parce qu'il est mono-fil.
 - 2026-11-04 : `rust-toolchain.toml` épingle `1.99.1` (rustup télécharge la chaîne au premier appel). `.cargo/config.toml` : `+crt-static`. Icônes lues depuis `build/` pour l'instant (déplacées en M7).
 - 2026-11-04 : M4 : une instance de test tuée sans son arbre de processus laisse des `msedgewebview2.exe` qui gardent le dossier de données de WebView2 ; l'instance suivante (autre port de débogage) ne répond plus. `test/app.js` met donc un délai aux requêtes CDP, et les tests tuent l'arbre (`taskkill /T /F`). Sous Tauri, `window.close()` n'existe pas côté page : la fermeture d'une fenêtre se teste par WM_CLOSE (`win.ps1`).
+- 2026-11-04 : M5 : le test d'ancien `shell.test.js` « pause affichée aussitôt » passait déjà : `Task::stop` positionne l'état avant d'attendre la fin du transfert. Le format des secrets passe à `base64(blob DPAPI)` ; un secret `v10` est reconnu à son préfixe et réécrit au premier démarrage.

@@ -45,7 +45,7 @@ pub struct Shell {
     pub entries: Mutex<Vec<Entry>>,
     pub api: Mutex<Option<ExtensionServer>>,
     pub last_status: Mutex<HashMap<String, Status>>,
-    pub pending_update: Mutex<Option<serde_json::Value>>,
+    pub pending_update: Mutex<Option<tachy_core::updater::UpdateInfo>>,
     pub glass: bool,
 }
 

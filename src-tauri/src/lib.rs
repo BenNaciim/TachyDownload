@@ -280,6 +280,7 @@ fn start(app: &AppHandle, dir: PathBuf, hidden: bool) -> Result<(), Box<dyn std:
 
     events::spawn_pump(app);
     events::spawn_tools_pump(app);
+    update::spawn_auto_check(app);
 
     let config = app
         .config()
