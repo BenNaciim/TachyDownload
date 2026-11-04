@@ -116,7 +116,7 @@
           </div>
           <h3>Découpage</h3>
           <div class="segmap" id="d-map" aria-hidden="true"></div>
-          <h3>Connexions</h3>
+          <h3 id="d-lanes-title">Connexions</h3>
           <div id="d-lanes" class="lanes"></div>
         </div>
         <div class="d-col">
@@ -301,7 +301,7 @@
       <fieldset>
         <legend>Extension navigateur</legend>
         <p class="muted">Port : <b id="info-port">–</b>. Collez ce jeton dans les options de l’extension.</p>
-        <span class="row2"><input id="info-token" readonly><button type="button" id="copy-token">Copier</button></span>
+        <span class="row2"><input id="info-token" readonly><button type="button" id="copy-token" aria-live="polite">Copier</button></span>
       </fieldset>
       <p id="set-error" class="error" role="alert"></p>
       <div class="actions">

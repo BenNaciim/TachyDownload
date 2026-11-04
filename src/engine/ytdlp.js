@@ -65,18 +65,36 @@ function formatArgs({ opts, maxHeight, ffmpeg }) {
   return ['-f', `b[height<=${h}]/b`]; // one file with sound: no merge tool needed
 }
 
+/**
+ * The request context yt-dlp should replay for a page or a manifest it does not know: what the browser sent with
+ * it (Referer, Origin, User-Agent). Never for the big video sites, which want none of it. Only clean values pass.
+ */
+function headerArgs(headers, url) {
+  if (!headers || isVideoPage(url)) return [];
+  const clean = (v, re) => (typeof v === 'string' && re.test(v) ? v : '');
+  const referer = clean(headers.referer, /^https?:\/\/\S+$/i);
+  const origin = clean(headers.origin, /^https?:\/\/[^\s/]+$/i);
+  const userAgent = clean(headers.userAgent, /^(?!-)[\x20-\x7e]+$/);
+  return [
+    ...(referer ? ['--referer', referer] : []),
+    ...(origin ? ['--add-headers', `Origin:${origin}`] : []),
+    ...(userAgent ? ['--user-agent', userAgent] : []),
+  ];
+}
+
 /** Looks at a video without downloading it: title, available heights and audio languages. */
-function probeVideo(ytdlp, url, { deno, cookies, proxy } = {}) {
+function probeVideo(ytdlp, url, { deno, cookies, proxy, headers } = {}) {
   return new Promise((resolve, reject) => {
     const args = ['-J', '--no-playlist', '--no-warnings', '--encoding', 'utf-8'];
     if (deno) args.push('--js-runtimes', `deno:${deno}`);
     if (cookies) args.push('--cookies-from-browser', cookies);
     if (proxy) args.push('--proxy', proxy);
+    args.push(...headerArgs(headers, url));
     args.push(url);
     execFile(ytdlp, args, { windowsHide: true, timeout: 60_000, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8' }, (err, stdout, stderr) => {
       if (err) {
         const line = String(stderr || err.message).split(/\r?\n/).find((l) => /ERROR/i.test(l)) || err.message;
-        return reject(new Error(explain(line) || line.replace(/^ERROR:\s*(\[[^\]]+\]\s*)?/i, '').slice(0, 200)));
+        return reject(new Error(explain(line, url) || line.replace(/^ERROR:\s*(\[[^\]]+\]\s*)?/i, '').slice(0, 200)));
       }
       try {
         resolve(summarizeProbe(JSON.parse(stdout)));
@@ -125,17 +143,22 @@ function killTree(pid) {
 
 /** A download handled by the yt-dlp program: it finds the streams, we show progress and keep the file. */
 /** Turns yt-dlp's English messages into something actionable; null when the cause is unknown. */
-function explain(msg) {
+function explain(msg, url = '') {
   const m = String(msg || '');
+  const youtube = !url || /youtube\.com|youtu\.be/i.test(url); // without an address, the usual suspect
   if (/not a bot|sign in to confirm/i.test(m)) return 'YouTube demande de prouver que vous n’êtes pas un robot. Dans Paramètres → Vidéos, choisissez « Cookies du navigateur » (un navigateur où vous êtes connecté à YouTube), puis réessayez.';
   if (/confirm your age|inappropriate for some users/i.test(m)) return 'Vidéo réservée aux adultes : YouTube exige une connexion.';
   if (/private video|members-only|join this channel/i.test(m)) return 'Vidéo privée ou réservée aux abonnés.';
-  if (/unsupported url/i.test(m)) return 'Cette page ne contient aucune vidéo que yt-dlp sache télécharger.';
+  if (/unsupported url/i.test(m)) return 'yt-dlp ne trouve aucune vidéo sur cette page. Ouvrez-la dans le navigateur avec l’extension, lancez la lecture, puis cliquez sur « Télécharger cette vidéo » : l’extension repère le flux pendant qu’il joue.';
   if (/video unavailable|this video is unavailable|has been removed|no longer available|does not exist/i.test(m)) return 'Vidéo indisponible ou supprimée.';
   if (/not available in your country|blocked it in your country/i.test(m)) return 'Vidéo non disponible dans votre pays.';
   if (/live event will begin|is live|premieres in/i.test(m)) return 'Direct ou première pas encore terminés : téléchargement impossible.';
-  if (/requested format is not available|no video formats|javascript runtime|n challenge/i.test(m)) return `YouTube n’a donné aucun format téléchargeable pour cette vidéo (${m.slice(0, 160)}).`;
-  if (/http error 403|forbidden/i.test(m)) return 'YouTube a refusé le téléchargement (403). Mettez yt-dlp à jour (Paramètres → Vidéos) ou choisissez les cookies d’un navigateur connecté.';
+  if (/requested format is not available|no video formats|javascript runtime|n challenge/i.test(m)) return `${youtube ? 'YouTube n’a' : 'Le site n’a'} donné aucun format téléchargeable pour cette vidéo (${m.slice(0, 160)}).`;
+  if (/http error 403|forbidden/i.test(m)) {
+    return youtube
+      ? 'YouTube a refusé le téléchargement (403). Mettez yt-dlp à jour (Paramètres → Vidéos) ou choisissez les cookies d’un navigateur connecté.'
+      : 'Le site a refusé le téléchargement (403) : l’adresse a sans doute expiré, ou il exige la page d’origine. Relancez la lecture dans le navigateur avec l’extension, qui enverra une adresse neuve.';
+  }
   if (/ffmpeg|postprocessing|merge/i.test(m)) return `La fusion de l’audio et de la vidéo a échoué : vérifiez que ffmpeg est installé (Paramètres → Vidéos). (${m.slice(0, 120)})`;
   if (/no space left|disk full|not enough space/i.test(m)) return 'Disque plein : libérez de la place puis réessayez.';
   if (/unable to download|getaddrinfo|timed out|network is unreachable|connection/i.test(m)) return `Problème de connexion : ${m.slice(0, 160)}`;
@@ -222,9 +245,12 @@ class YtdlpDownload extends Download {
       '--print', 'before_dl:DMT %(title)s',
       '--print', 'after_move:DMF %(filepath)s',
       '-P', s.dir,
-      '-o', '%(title).150B [%(id)s].%(ext)s',
+      // A name chosen for the file ("%" doubled: it is a yt-dlp template) or the video's own title and id.
+      '-o', s.outStem ? `${s.outStem.replace(/%/g, '%%')}.%(ext)s` : '%(title).150B [%(id)s].%(ext)s',
       '--concurrent-fragments', String(Math.max(1, s.connections)),
     ];
+    // A video downloaded again lands on the file it replaces: without this, yt-dlp calls it "already downloaded" and stops.
+    if (s.replaces) args.push('--force-overwrites');
     if (ffmpeg) args.push('--ffmpeg-location', path.dirname(ffmpeg));
     args.push(...formatArgs({ opts, maxHeight, ffmpeg }));
     // Without a JS engine YouTube hides the H.264 formats and may hide all of them.
@@ -232,6 +258,7 @@ class YtdlpDownload extends Download {
     if (deno) args.push('--js-runtimes', `deno:${deno}`);
     if (cfg.proxy) args.push('--proxy', cfg.proxy);
     if (cfg.ytCookies) args.push('--cookies-from-browser', cfg.ytCookies); // a signed-in browser passes YouTube's bot check
+    args.push(...headerArgs(s.headers, s.url));
     // The lower of the shared limit and this video's own limit (yt-dlp reads it at start: a change applies on resume).
     const caps = [cfg.speedLimitKBps, s.speedLimitKBps].filter((v) => v > 0);
     if (caps.length) args.push('--limit-rate', `${Math.min(...caps)}K`);
@@ -247,6 +274,7 @@ class YtdlpDownload extends Download {
     if (deno) args.push('--js-runtimes', `deno:${deno}`);
     if (cfg.proxy) args.push('--proxy', cfg.proxy);
     if (cfg.ytCookies) args.push('--cookies-from-browser', cfg.ytCookies);
+    args.push(...headerArgs(this.state.headers, this.state.url));
     args.push(this.state.url);
     return new Promise((resolve) =>
       execFile(ytdlp, [...(this.ctx.ytdlpPrefix ?? []), ...args], { windowsHide: true, timeout: 60_000, maxBuffer: 64 * 1024 * 1024, encoding: 'utf8', signal }, (err, stdout) => {
@@ -262,10 +290,10 @@ class YtdlpDownload extends Download {
   /** Downloads the plain file over several connections with the app's own engine. False when it cannot be done that way. */
   async _runDirect(direct, signal) {
     const s = this.state;
-    s.headers = { ...(s.headers ?? {}), referer: s.url, userAgent: direct.userAgent };
+    s.headers = { ...(s.headers ?? {}), referer: s.url, origin: '', userAgent: direct.userAgent };
     const info = await probe(direct.url, this._baseHeaders(direct.url), signal, (u, i) => this._fetch(u, i));
     if (!info.rangeOk || !info.size) return false;
-    if (!s.segments) s.filename = path.basename(uniquePath(s.dir, `${sanitizeFilename(direct.title)}.${direct.ext}`));
+    if (!s.segments && !s.replaces) s.filename = path.basename(uniquePath(s.dir, `${sanitizeFilename(direct.title)}.${direct.ext}`));
     Object.assign(s, { finalUrl: info.finalUrl, size: info.size, rangeOk: true, etag: info.etag, lastModified: info.lastModified, direct: true });
     await Download.prototype._run.call(this, signal);
     return true;
@@ -301,6 +329,8 @@ class YtdlpDownload extends Download {
     // (a base kept from a paused run would be added on top and inflate the size).
     s.ytd = { base: 0, cur: 0, total: 0 };
     s.frag = null;
+    // The chosen name is fixed once, so a resumed run finds the same partial file and a finished one is never overwritten.
+    if (s.outName && !s.outStem) s.outStem = path.basename(uniquePath(s.dir, `${s.outName}.mp4`), '.mp4');
     let firstReport = true;
     const startedAt = Date.now();
     this.samples = [];
@@ -329,7 +359,7 @@ class YtdlpDownload extends Download {
         firstReport = false;
         if (gained > 0) this.samples.push([Date.now(), gained]);
       } else if (line.startsWith('DMT ')) {
-        s.filename = sanitizeFilename(line.slice(4).trim() || 'video') + (s.ytOpts?.audioOnly ? (this.ctx.ffmpeg?.() ? '.mp3' : '.m4a') : '.mp4');
+        if (!s.outStem) s.filename = sanitizeFilename(line.slice(4).trim() || 'video') + (s.ytOpts?.audioOnly ? (this.ctx.ffmpeg?.() ? '.mp3' : '.m4a') : '.mp4');
       } else if (line.startsWith('DMF ')) {
         finalFile = line.slice(4).trim();
       } else if (/^ERROR:/i.test(line)) {
@@ -374,7 +404,7 @@ class YtdlpDownload extends Download {
     }
     if (code !== 0 || !finalFile || !fs.existsSync(finalFile)) {
       const detail = lastErr || tail.join(' · ');
-      const message = explain(detail) || detail || `yt-dlp n’a pas pu télécharger cette vidéo (code ${code})`;
+      const message = explain(detail, s.url) || detail || `yt-dlp n’a pas pu télécharger cette vidéo (code ${code})`;
       writeDiag(message);
       const failure = new FatalError(message);
       failure.retryable = /getaddrinfo|timed out|network is unreachable|connection (reset|aborted|refused)|http error 5\d\d/i.test(detail);
@@ -392,4 +422,4 @@ class YtdlpDownload extends Download {
   }
 }
 
-module.exports = { YtdlpDownload, directFile, applyProgress, formatDiag, explain, isVideoPage, isPlaylistUrl, listPlaylist, probeVideo, summarizeProbe, formatArgs, cleanYtOpts };
+module.exports = { YtdlpDownload, headerArgs, directFile, applyProgress, formatDiag, explain, isVideoPage, isPlaylistUrl, listPlaylist, probeVideo, summarizeProbe, formatArgs, cleanYtOpts };

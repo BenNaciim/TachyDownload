@@ -12,9 +12,10 @@ const URL = 'https://www.youtube.com/watch?v=abcdefghijk';
 const FAKE = path.join(__dirname, 'fake-ytdlp.js');
 
 /** Runs one video through the real engine with the stand-in yt-dlp and returns what happened. */
-async function run(mode, settings = {}, taskLimit = 0) {
+async function run(mode, settings = {}, taskLimit = 0, add = {}) {
   const dir = tmpDir();
   const dataDir = tmpDir();
+  add.before?.(dir);
   const argsFile = path.join(dataDir, 'args.json');
   process.env.FAKE_MODE = mode;
   process.env.FAKE_ARGS_FILE = argsFile;
@@ -22,7 +23,7 @@ async function run(mode, settings = {}, taskLimit = 0) {
   const m = new DownloadManager({ storePath: path.join(dataDir, 'downloads.json'), settings: { dir, ...settings }, tickMs: 50, tools });
   m.start();
   try {
-    const { id } = m.add(URL, { kind: 'ytdlp', paused: Boolean(taskLimit) });
+    const { id } = m.add(add.url ?? URL, { kind: 'ytdlp', paused: Boolean(taskLimit), ...add.opts });
     if (taskLimit) {
       m.setTaskLimit(id, taskLimit);
       m.resume(id);
@@ -52,6 +53,31 @@ test('a normal run completes, keeps the file and always asks for a single video'
     assert.ok(r.args.includes(flag), `${flag} is passed to yt-dlp`);
   }
   assert.match(r.diag, /Code de sortie : 0/, 'a diagnostic is written even on success');
+});
+
+const MANIFEST = { url: 'https://cdn.example/v/manifest.mpd', opts: { sniffed: true, filename: 'Série - S01E04', referer: 'https://player.example/e/1', origin: 'https://player.example' } };
+
+test('a manifest found by the extension is named after its page, and gets the headers the browser sent', async () => {
+  const r = await run('ok', {}, 0, MANIFEST);
+  assert.equal(r.task.status, 'completed', r.task.error);
+  assert.equal(r.task.filename, 'Série - S01E04.mp4');
+  assert.ok(fs.existsSync(path.join(r.dir, 'Série - S01E04.mp4')));
+  assert.equal(r.args[r.args.indexOf('-o') + 1], 'Série - S01E04.%(ext)s');
+  assert.equal(r.args[r.args.indexOf('--referer') + 1], 'https://player.example/e/1');
+  assert.ok(r.args.includes('Origin:https://player.example'));
+});
+
+test('a manifest named after its page never overwrites a file that is already there', async () => {
+  const r = await run('ok', {}, 0, { ...MANIFEST, before: (dir) => fs.writeFileSync(path.join(dir, 'Série - S01E04.mp4'), 'older') });
+  assert.equal(r.task.status, 'completed', r.task.error);
+  assert.equal(r.task.filename, 'Série - S01E04 (1).mp4');
+  assert.equal(fs.readFileSync(path.join(r.dir, 'Série - S01E04.mp4'), 'utf8'), 'older');
+});
+
+test('a "%" in the page title is not read as a yt-dlp template field', async () => {
+  const r = await run('ok', {}, 0, { ...MANIFEST, opts: { ...MANIFEST.opts, filename: '100% vrai' } });
+  assert.equal(r.args[r.args.indexOf('-o') + 1], '100%% vrai.%(ext)s');
+  assert.equal(r.task.filename, '100% vrai.mp4');
 });
 
 test('a printed path that lost a character is found again by the video id', async () => {
@@ -105,6 +131,21 @@ test('known yt-dlp messages become actions, unknown ones stay null', () => {
   assert.equal(explain('something nobody has seen'), null);
 });
 
+test('a page yt-dlp does not know sends the user to the extension, not to a dead end', () => {
+  const msg = explain('ERROR: Unsupported URL: https://site.example/serie/1');
+  assert.match(msg, /extension/i, 'says what to do instead');
+  assert.match(msg, /lecture/i, 'the video has to be playing for the extension to see it');
+  assert.doesNotMatch(msg, /YouTube/);
+});
+
+test('a refused stream is explained with its likely cause, for a site that is not YouTube', () => {
+  const msg = explain('HTTP Error 403: Forbidden', 'https://cdn.example/v/manifest.mpd');
+  assert.doesNotMatch(msg, /YouTube/);
+  assert.match(msg, /403/);
+  assert.match(explain('HTTP Error 403: Forbidden', 'https://www.youtube.com/watch?v=abcdefghijk'), /YouTube/);
+  assert.match(explain('HTTP Error 403: Forbidden'), /YouTube/, 'without an address, as before');
+});
+
 test('a plain-file site is fetched by the app itself over several connections', async () => {
   const { startServer } = require('./helpers');
   const body = Buffer.alloc(5 * 1024 * 1024, 9);
@@ -126,6 +167,60 @@ test('a plain-file site is fetched by the app itself over several connections', 
     assert.ok(id);
   } finally {
     await m.shutdown();
+    await srv.close();
+    delete process.env.FAKE_DIRECT_URL;
+  }
+});
+
+/** Downloads a video, then asks for it again; the stand-in yt-dlp fills the second copy with another byte. */
+async function runTwice(add = {}) {
+  const dir = tmpDir();
+  const dataDir = tmpDir();
+  const argsFile = path.join(dataDir, 'args.json');
+  Object.assign(process.env, { FAKE_MODE: 'ok', FAKE_ARGS_FILE: argsFile, FAKE_FILL: '7' });
+  const tools = { find: (n) => (n === 'ytdlp' ? process.execPath : null), ytdlpPrefix: [FAKE] };
+  const m = new DownloadManager({ storePath: path.join(dataDir, 'downloads.json'), settings: { dir }, tickMs: 50, tools });
+  m.start();
+  try {
+    const { id } = m.add(add.url ?? URL, { kind: 'ytdlp', ...add.opts });
+    await waitFor(() => ['completed', 'error'].includes(m.list()[0].status), 20000);
+    assert.equal(m.list()[0].status, 'completed', m.list()[0].error ?? '');
+    process.env.FAKE_FILL = '9';
+    m.redownload(id);
+    await waitFor(() => ['completed', 'error'].includes(m.list()[0].status), 20000);
+    // No arguments file when the app fetched the plain file itself: yt-dlp only answered the probe.
+    return { task: m.list()[0], dir, files: fs.readdirSync(dir), args: fs.existsSync(argsFile) ? JSON.parse(fs.readFileSync(argsFile, 'utf8')) : [] };
+  } finally {
+    await m.shutdown();
+    for (const k of ['FAKE_MODE', 'FAKE_ARGS_FILE', 'FAKE_FILL']) delete process.env[k];
+  }
+}
+
+test('a video downloaded again is overwritten in place: yt-dlp is told to, and the name stays', async () => {
+  const r = await runTwice();
+  assert.equal(r.task.status, 'completed', r.task.error ?? '');
+  assert.ok(r.args.includes('--force-overwrites'), 'without it yt-dlp answers "already downloaded" and does nothing');
+  assert.equal(r.task.filename, 'Episode [abcdefghijk].mp4');
+  assert.deepEqual(r.files, ['Episode [abcdefghijk].mp4']);
+  assert.equal(fs.readFileSync(path.join(r.dir, r.task.filename))[0], 9, 'it is the new copy');
+});
+
+test('a video named after its page keeps that name when downloaded again', async () => {
+  const r = await runTwice(MANIFEST);
+  assert.equal(r.task.status, 'completed', r.task.error ?? '');
+  assert.deepEqual(r.files, ['Série - S01E04.mp4']);
+  assert.equal(fs.readFileSync(path.join(r.dir, 'Série - S01E04.mp4'))[0], 9);
+});
+
+test('a plain-file video fetched by the app keeps its name when downloaded again', async () => {
+  const { startServer } = require('./helpers');
+  const srv = await startServer(Buffer.alloc(3 * 1024 * 1024, 5));
+  process.env.FAKE_DIRECT_URL = srv.url;
+  try {
+    const r = await runTwice({ url: 'https://videos.example.org/watch/42' });
+    assert.equal(r.task.status, 'completed', r.task.error ?? '');
+    assert.deepEqual(r.files, ['Direct clip.mp4'], 'no "(1)" copy beside it');
+  } finally {
     await srv.close();
     delete process.env.FAKE_DIRECT_URL;
   }

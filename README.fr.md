@@ -17,14 +17,17 @@ Gestionnaire de téléchargement rapide pour Windows : segments parallèles, rep
 - **Fenêtre de confirmation** (comme IDM) : chaque téléchargement venu du navigateur ouvre une petite fenêtre avec le nom, la taille, le dossier de destination (modifiable) et trois choix : « Télécharger maintenant », « Plus tard » (ajouté en pause) ou « Annuler ». Désactivable dans Paramètres → Classement et démarrage.
 - **YouTube, Vimeo, Dailymotion, Twitch (rediffusions)** via yt-dlp, ffmpeg et Deno (le moteur JavaScript dont YouTube a besoin pour proposer le H.264), téléchargés à la fin de l'installation (releases officielles GitHub, vérifiées par SHA-256). yt-dlp est remis à jour automatiquement, au plus une fois par jour. Qualité maximale réglable, H.264 + AAC de préférence. La fenêtre de confirmation analyse la vidéo et propose de choisir la **qualité** (2160p, 1080p, 720p…), la **langue audio** quand la vidéo en offre plusieurs, ou **audio seul** (MP3 avec ffmpeg).
 - **Playlists YouTube** : coller l'adresse d'une playlist ajoute toutes ses vidéos (200 maximum) dans un dossier à son nom.
-- **Flux HLS** (`.m3u8`, non chiffrés ou AES-128) : téléchargés en segments, puis convertis en `.mp4` par ffmpeg sans recompression.
+- **Flux HLS** (`.m3u8`, non chiffrés ou AES-128) : téléchargés en segments sur plusieurs connexions, puis convertis en `.mp4` par ffmpeg sans recompression. Un segment lent ou à réessayer ne retient pas les autres connexions : elles continuent d'avancer (jusqu'à 128 Mo en attente en mémoire) pendant que le fichier s'écrit toujours dans l'ordre.
 - **Liens expirés** : si un lien signé meurt en cours de route, le fichier partiel est gardé. Pour une vidéo détectée par l'extension, celle-ci rouvre la page en arrière-plan, récupère la nouvelle adresse et la reprise continue toute seule. Pour un téléchargement direct, le bouton « Ouvrir la page » ramène à la page.
 - **Classement automatique** par type : Vidéos, Musique, Images, Documents, Archives, Programmes. La colonne de gauche reprend ces types (Vidéos, Musique, Documents, Compressés, Exécutables, Images, Autres) pour filtrer la liste, avec un compteur par type.
-- **Détails en accordéon** : un clic sur un téléchargement déroule, juste en dessous, le découpage, la vitesse de chaque connexion et les informations ; un second clic le referme.
+- **Re-télécharger** : le panneau de détails d'un téléchargement terminé a un bouton « Re-télécharger » qui récupère à nouveau le fichier et **remplace** l'ancien (même nom, pas de « (1) »). Il fonctionne pour les fichiers, les flux HLS et les vidéos passant par yt-dlp. Si l'ancien fichier est ouvert dans un autre programme, l'application le dit et n'y touche pas. Un lien mort entre-temps suit le parcours « Liens expirés » ci-dessus.
+- **Détails en accordéon** : un clic sur un téléchargement déroule, juste en dessous, le découpage, la vitesse de chaque connexion et les informations ; un second clic le referme. Pour un flux vidéo, la carte montre jusqu'où le fichier est écrit et entoure les segments en cours de réception, et les informations donnent le nombre de connexions au travail.
 - **Mises à jour automatiques** : l’application consulte les releases GitHub du projet, télécharge le nouvel installateur, vérifie son SHA-256 puis l’installe en silence et se relance (désactivable dans Paramètres → Mises à jour). Cela suppose que les releases soient publiques.
 - **Zone de notification** (la croix réduit la fenêtre, menu clic droit, vitesse en infobulle), **lancement avec Windows** et action en fin de file (quitter, veille, arrêt).
 - **Liquid Glass** : fenêtre translucide (acrylique Windows 11 22H2 ou plus récent), désactivable dans Paramètres → Apparence. Thèmes clair et sombre.
 - **Extension navigateur** (Chrome, Edge, Brave, Firefox) : détecte les vidéos des pages, affiche un bouton « Télécharger cette vidéo » sur le lecteur et un compteur dans la barre d'outils, capture les téléchargements et ajoute un menu clic droit « Télécharger avec Tachy Download ».
+- **Flux comme le navigateur les a demandés** : l'extension garde le `Referer` et l'`Origin` que le navigateur a envoyés avec chaque flux (le cadre du lecteur, pas seulement la page) et l'application les rejoue, ce qu'exigent les hébergeurs vidéo qui les contrôlent. Elle reconnaît aussi les playlists servies sous un nom étrange (`text/plain`, sans extension, `.m3u8` dans l'adresse) en lisant leurs premiers octets, et les manifestes **DASH** (`.mpd`, non protégés), que yt-dlp télécharge et fusionne.
+- **Mode diagnostic** (popup de l'extension) : enregistre ce que le navigateur a vu sur une page et pourquoi chaque réponse a été proposée ou non comme vidéo ; « Copier le diagnostic » met le rapport dans le presse-papiers.
 
 ## Installer
 
@@ -49,7 +52,7 @@ Les téléchargements vont par défaut dans le dossier Téléchargements. Les r�
 **Firefox** : ouvrir `about:debugging#/runtime/this-firefox`, « Charger un module complémentaire temporaire », choisir `extension/manifest.json` (temporaire jusqu'au redémarrage ; une installation permanente demande une signature Mozilla). Puis les étapes 2 et 3.
 
 1. **Chrome / Edge** : ouvrir `chrome://extensions`, activer le mode développeur, « Charger l'extension non empaquetée », choisir le dossier `extension/` (copié aussi dans `resources\extension` du dossier d'installation).
-2. Dans l'application : Paramètres → Extension navigateur → **Copier** le jeton.
+2. Dans l'application : Paramètres → Extension navigateur → **Copier** le jeton (le bouton devient « Copié » avec une coche pendant deux secondes).
 3. Dans les options de l'extension : coller le jeton, vérifier le port, « Enregistrer et tester ».
 
 Si l'application est fermée ou ne répond pas, l'extension laisse le navigateur télécharger normalement.
@@ -71,6 +74,7 @@ test/         tests node:test (serveur HTTP local avec Range)
 ## Limites connues
 
 - Pas de FTP ni de torrent.
-- Pas de DRM (Netflix, Disney+, Prime…), pas de directs, pas de DASH (`.mpd`). Un site qui diffuse sa vidéo dans un format non pris en charge n'est pas détecté.
-- L'extension est testée dans Chrome ; pour Firefox, le manifeste est validé (web-ext lint) mais le chargement réel n'a pas été testé de bout en bout.
+- Pas de DRM (Netflix, Disney+, Prime… ; un manifeste DASH protégé n'est pas proposé) et pas de directs. L'extension voit ce que le navigateur charge dans ses onglets : une vidéo servie sans playlist, manifeste ou fichier reconnaissable n'est pas détectée, et rien n'est capturé hors du navigateur.
+- Un hébergeur qui contrôle autre chose que `Referer`, `Origin` et les cookies (empreinte TLS, jeton à usage unique lié au navigateur) peut encore refuser l'application.
+- L'extension est testée dans Chrome. Dans Firefox 159, elle a été chargée en module temporaire et pilotée de bout en bout (détection dans le cadre d'un lecteur d'un autre domaine, capture de `Referer`/`Origin`, bouton, envoi à l'application, messages d'erreur, popup) ; l'installation permanente demande toujours une signature Mozilla.
 - Windows uniquement pour l'instant.

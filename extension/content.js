@@ -66,9 +66,12 @@
       const r = await ask({ type: 'download', url });
       main.classList.toggle('ok', Boolean(r?.ok));
       main.classList.toggle('err', !r?.ok);
+      // No answer at all means this page still runs the script of an extension that was reloaded or updated since.
       label.textContent = r?.ok
         ? 'Envoyé à Tachy Download ✓'
-        : 'Tachy Download ne répond pas : lancez l’application et vérifiez le jeton dans les options de l’extension.';
+        : r === null
+          ? 'L’extension a été rechargée ou mise à jour : rechargez cette page (F5), puis réessayez.'
+          : r.message || 'Envoi impossible : réessayez, ou rechargez la page.';
       menu.hidden = true;
       setTimeout(() => {
         main.classList.remove('ok', 'err');
@@ -82,7 +85,7 @@
       menu.replaceChildren(
         ...items.map((it) => {
           const b = document.createElement('button');
-          b.textContent = `${it.kind === 'ytdlp' ? 'Vidéo de la page' : it.kind === 'hls' ? 'Flux vidéo (HLS)' : it.ext.toUpperCase()}${it.size ? ` · ${size(it.size)}` : ''}${streamInfo(it)}`;
+          b.textContent = `${it.kind === 'ytdlp' ? 'Vidéo de la page' : it.kind === 'hls' ? 'Flux vidéo (HLS)' : it.kind === 'dash' ? 'Flux vidéo (DASH)' : it.ext.toUpperCase()}${it.size ? ` · ${size(it.size)}` : ''}${streamInfo(it)}`;
           b.addEventListener('click', () => send(it.url));
           return b;
         }),

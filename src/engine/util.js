@@ -60,13 +60,41 @@ function categoryFor(filename) {
  * End of a download, shared by every engine: moves the finished file `from` into its final folder (the
  * type folder when that setting is on), under a free name, then records where it ended up on the task
  * state. A file already in the right place is left alone. Returns the final path.
+ * A download redone on purpose (`s.replaces`) takes the place of the file it replaces; when that file is in use
+ * and cannot be replaced, both are kept.
  */
 function settleFinished(ctx, s, from, name) {
   const finalDir = ctx.finalDir?.(name, s.dir) ?? path.dirname(from);
   fs.mkdirSync(finalDir, { recursive: true });
   const inPlace = path.resolve(finalDir, name) === path.resolve(from);
-  const target = inPlace ? from : uniquePath(finalDir, name, { ignorePart: true });
-  if (!inPlace) fs.renameSync(from, target);
+  let target = from;
+  if (!inPlace) {
+    const wanted = path.join(finalDir, name);
+    target = null;
+    if (s.replaces && path.resolve(s.replaces) === path.resolve(wanted)) {
+      try {
+        fs.renameSync(from, wanted); // replaces the old file in one step
+        target = wanted;
+      } catch {
+        // in use by another program: the new file gets a free name instead
+      }
+    }
+    if (!target) {
+      target = uniquePath(finalDir, name, { ignorePart: true });
+      fs.renameSync(from, target);
+    }
+  }
+  if (s.replaces) {
+    // The new file may have another extension than the old one (a stream converted to mp4): the old one goes too.
+    if (path.resolve(s.replaces) !== path.resolve(target)) {
+      try {
+        fs.rmSync(s.replaces, { force: true });
+      } catch {
+        // in use: left where it is
+      }
+    }
+    s.replaces = null;
+  }
   s.dir = finalDir;
   s.filename = path.basename(target);
   s.completedAt = Date.now();

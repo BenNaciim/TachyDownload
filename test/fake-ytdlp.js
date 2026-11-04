@@ -17,7 +17,9 @@ if (args.includes('-J')) {
 const dir = args[args.indexOf('-P') + 1];
 if (process.env.FAKE_ARGS_FILE) fs.writeFileSync(process.env.FAKE_ARGS_FILE, JSON.stringify(args));
 const mode = process.env.FAKE_MODE || 'ok';
-const real = path.join(dir, 'Episode [abcdefghijk].mp4');
+// The file is named the way the -o template says, as the real one does (title "Episode", id "abcdefghijk").
+const template = args.includes('-o') ? args[args.indexOf('-o') + 1] : '%(title).150B [%(id)s].%(ext)s';
+const real = path.join(dir, template.replace('%(title).150B', 'Episode').replace('%(id)s', 'abcdefghijk').replace('%(ext)s', 'mp4').replace(/%%/g, '%'));
 const out = (l) => process.stdout.write(`${l}\n`);
 
 if (mode === 'fail') {
@@ -33,6 +35,7 @@ if (mode === 'nofile') {
   process.exit(0);
 }
 fs.mkdirSync(dir, { recursive: true });
-fs.writeFileSync(real, Buffer.alloc(2 * 1024 * 1024, 7));
+// Like the real one: a file already there is "already downloaded" and left alone, unless told to overwrite.
+if (!fs.existsSync(real) || args.includes('--force-overwrites')) fs.writeFileSync(real, Buffer.alloc(2 * 1024 * 1024, Number(process.env.FAKE_FILL || 7)));
 // "renamed": the printed path lost a character on the way, as happened with the Windows code page.
 out(`DMF ${mode === 'renamed' ? path.join(dir, 'Episode ? [abcdefghijk].mp4') : real}`);

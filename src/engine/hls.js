@@ -8,6 +8,7 @@ const { Download, FatalError, httpError } = require('./download');
 const { sleep, settleFinished } = require('./util');
 
 const MAX_RETRIES = 4;
+const MAX_AHEAD_BYTES = 128 * 1024 * 1024; // received out of turn and waiting to be written, at most
 
 function parseAttrs(line) {
   const out = {};
@@ -82,6 +83,11 @@ class HlsDownload extends Download {
     const total = Math.max(this.state.size ?? 0, snap.downloaded, 1);
     snap.segments = [{ start: 0, end: total - 1, pos: snap.downloaded }];
     snap.hlsProgress = hls?.total ? `${hls.next} / ${hls.total} segments` : null;
+    // What the details view draws: how far the written part goes and which segments are in flight or received ahead.
+    snap.hlsTotal = hls?.total ?? 0;
+    snap.hlsDone = hls?.next ?? 0;
+    snap.hlsActive = this.live?.running.size ?? 0;
+    snap.hlsLive = this.live ? [...this.live.running, ...this.live.ready.keys()].sort((a, b) => a - b) : [];
     return snap;
   }
 
@@ -155,24 +161,59 @@ class HlsDownload extends Download {
 
     const fh = await fs.promises.open(this.partPath, fs.existsSync(this.partPath) && hls.next > 0 ? 'r+' : 'w');
     const ticker = setInterval(() => this.emit('update'), 250);
+    // Every connection takes the next segment as soon as it is free, even when an earlier one is still slow:
+    // segments that arrive out of turn wait in memory until it is theirs to be written, up to a cap.
+    const window = Math.max(1, s.connections);
+    const maxAhead = this.ctx.hlsAheadBytes ?? MAX_AHEAD_BYTES;
+    const running = new Set(); // segments being fetched
+    const ready = new Map(); // segments received but not written yet
+    let buffered = 0; // bytes held in `ready`
+    let fetchIdx = hls.next;
+    let failure = null;
+    let over = false;
+    let wake = null;
+    const nudge = () => {
+      const w = wake;
+      wake = null;
+      w?.();
+    };
+    this.live = { running, ready };
+    // The segment the writer waits for is always fetched before any later one, so the cap cannot starve it.
+    const launch = () => {
+      while (!over && !failure && running.size < window && fetchIdx < items.length && buffered < maxAhead) {
+        const i = fetchIdx++;
+        const it = items[i];
+        running.add(i);
+        this._bytes(it.url, signal, it.key, it.seq).then(
+          (buf) => {
+            running.delete(i);
+            ready.set(i, buf);
+            buffered += buf.length;
+            launch();
+            nudge();
+          },
+          (err) => {
+            running.delete(i);
+            failure ??= err;
+            nudge();
+          },
+        );
+      }
+    };
     try {
       await fh.truncate(hls.bytes); // drop a partially written tail from an earlier run
-      const window = Math.max(1, s.connections);
-      const inflight = new Map();
-      let fetchIdx = hls.next;
-      const launch = () => {
-        while (inflight.size < window && fetchIdx < items.length) {
-          const i = fetchIdx++;
-          const it = items[i];
-          const p = this._bytes(it.url, signal, it.key, it.seq);
-          p.catch(() => {});
-          inflight.set(i, p);
-        }
-      };
       launch();
       while (hls.next < items.length) {
-        const buf = await inflight.get(hls.next);
-        inflight.delete(hls.next);
+        if (failure) throw failure;
+        const buf = ready.get(hls.next);
+        if (!buf) {
+          await new Promise((resolve) => {
+            wake = resolve;
+          });
+          continue;
+        }
+        ready.delete(hls.next);
+        buffered -= buf.length;
         let off = 0;
         while (off < buf.length) {
           const { bytesWritten } = await fh.write(buf, off, buf.length - off, hls.bytes + off);
@@ -186,6 +227,8 @@ class HlsDownload extends Download {
       }
       await fh.sync();
     } finally {
+      over = true;
+      this.live = null;
       clearInterval(ticker);
       await fh.close().catch(() => {});
     }

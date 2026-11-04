@@ -19,6 +19,7 @@
   "background": {
     "service_worker": "background.js",
     "scripts": [
+      "sniff.js",
       "background.js"
     ]
   },

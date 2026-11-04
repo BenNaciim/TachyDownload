@@ -83,9 +83,10 @@ function validateUrl(url) {
 const RETRY_DELAYS = [15, 30, 60, 120, 300, 600];
 
 class DownloadManager extends EventEmitter {
-  constructor({ storePath, settings = {}, tickMs = 1000, tools = null, retryDelays = RETRY_DELAYS, siteAuth = null, tar = undefined } = {}) {
+  constructor({ storePath, settings = {}, tickMs = 1000, tools = null, retryDelays = RETRY_DELAYS, siteAuth = null, tar = undefined, hlsAheadBytes = undefined } = {}) {
     super();
     this.retryDelays = retryDelays;
+    this.hlsAheadBytes = hlsAheadBytes; // only set by tests: how much a video stream may receive ahead of a slow segment
     this.siteAuth = siteAuth; // (url) => extra request headers for that site, or null
     this.tar = tar ?? systemTar();
     this.tools = tools ?? { find: () => null };
@@ -209,6 +210,7 @@ class DownloadManager extends EventEmitter {
     const ctx = {
       ytdlp: () => this.tools.find('ytdlp'),
       ytdlpPrefix: this.tools.ytdlpPrefix, // only set by tests, to run a stand-in script instead of yt-dlp.exe
+      hlsAheadBytes: this.hlsAheadBytes,
       ffmpeg: () => this.tools.find('ffmpeg'),
       deno: () => this.tools.find('deno'),
       settings: () => ({ ...this.settings, speedLimitKBps: this.effectiveLimit() }),
@@ -254,7 +256,9 @@ class DownloadManager extends EventEmitter {
       id: crypto.randomUUID(),
       kind,
       ownFolder: Boolean(opts.ownFolder),
-      pageUrl: /^https?:\/\//i.test(opts.referer || '') ? opts.referer : '',
+      // The page to reopen for a fresh link. The Referer is what the browser sent with the request, which
+      // can be the player's frame rather than the page: without a separate page, the Referer stands in.
+      pageUrl: [opts.page, opts.referer].find((u) => /^https?:\/\//i.test(u || '')) ?? '',
       autoRefresh: Boolean(opts.sniffed), // a video the extension found: it can reopen the page itself
       needsRefresh: false,
       url: cleanUrl,
@@ -271,6 +275,7 @@ class DownloadManager extends EventEmitter {
       lastModified: null,
       headers: {
         referer: opts.referer || '',
+        origin: opts.origin || '',
         // yt-dlp reads the cookies of the chosen browser itself: nothing to keep for it.
         cookie: kind === 'ytdlp' ? '' : opts.cookie || '',
         userAgent: opts.userAgent || '',
@@ -281,7 +286,11 @@ class DownloadManager extends EventEmitter {
       completedAt: null,
       startAt: opts.startAt ? Number(opts.startAt) : null,
     };
-    if (kind === 'ytdlp') state.ytOpts = cleanYtOpts(opts.ytOpts);
+    if (kind === 'ytdlp') {
+      state.ytOpts = cleanYtOpts(opts.ytOpts);
+      // A manifest the extension found has no title of its own ("manifest"): the file takes the name of the page.
+      if (opts.sniffed && opts.filename) state.outName = sanitizeFilename(opts.filename);
+    }
     if (!state.dir) throw new Error('Aucun dossier de destination configuré');
     state.filename = this._freeName(state.dir, state.filename, isHls);
     if (state.startAt && state.startAt > Date.now()) state.status = 'scheduled';
@@ -347,12 +356,58 @@ class DownloadManager extends EventEmitter {
     s.etag = null;
     s.lastModified = null;
     s.filenameLocked = true; // the .part file already carries its final name
-    for (const [k, v] of [['referer', opts.referer], ['cookie', opts.cookie], ['userAgent', opts.userAgent]]) {
+    for (const [k, v] of [['referer', opts.referer], ['origin', opts.origin], ['cookie', opts.cookie], ['userAgent', opts.userAgent]]) {
       if (v) s.headers[k] = v;
     }
     s.needsRefresh = false;
     s.error = null;
     s.status = 'queued';
+    this.emit('update', t.snapshot());
+    this._scheduleSave();
+    this.pump();
+    return t.snapshot();
+  }
+
+  /**
+   * Downloads a finished file again, in the same row and under the same name. The old file stays where it is
+   * until the new one is complete and then gives way to it: a failure (an expired link, say) loses nothing.
+   */
+  redownload(id) {
+    const t = this._get(id);
+    const s = t.state;
+    if (s.status !== 'completed') throw new Error('Seul un téléchargement terminé peut être refait');
+    const old = path.join(s.dir, s.filename);
+    if (fs.existsSync(old)) {
+      try {
+        fs.closeSync(fs.openSync(old, 'r+')); // fails when another program holds the file or it is read-only
+      } catch {
+        throw new Error('Le fichier ne peut pas être remplacé : fermez-le dans l’autre programme qui l’utilise (ou retirez la lecture seule), puis réessayez.');
+      }
+      s.replaces = old;
+    }
+    Object.assign(s, {
+      status: 'queued',
+      error: null,
+      completedAt: null,
+      startAt: null,
+      retryAt: null,
+      retryCount: 0,
+      needsRefresh: false,
+      filenameLocked: true, // keep the name: the old file is the one in the way, not a reason for "(1)"
+      ownFolder: true, // it stays in the folder where the old file is, whatever the sorting rules say
+      size: null,
+      finalUrl: null,
+      rangeOk: false,
+      etag: null,
+      lastModified: null,
+      segments: null,
+      frag: null,
+      phase: null,
+      direct: false,
+    });
+    delete s.hls;
+    delete s.ytd;
+    t.samples = [];
     this.emit('update', t.snapshot());
     this._scheduleSave();
     this.pump();

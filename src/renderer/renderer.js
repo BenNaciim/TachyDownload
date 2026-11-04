@@ -487,6 +487,7 @@ function select(id) {
   selectedId = id;
   drawerSig = '';
   laneCount = -1;
+  $('d-map').replaceChildren(); // another download may draw its cells differently
   const entry = tasks.get(id);
   entry.tr.after(drawer);
   drawer.hidden = false;
@@ -517,7 +518,33 @@ document.addEventListener('keydown', (e) => {
 });
 
 function infoRow(dl, label, value) {
-  dl.append(el('dt', { textContent: label }), el('dd', { textContent: value, title: value }));
+  const dd = el('dd', { textContent: value, title: value });
+  dl.append(el('dt', { textContent: label }), dd);
+  return dd;
+}
+
+/**
+ * Video streams reach the file in order: the filled part is one stretch from the left, and the connections work
+ * just ahead of it. Cells group the segments; the ones holding a segment in flight or received ahead are outlined.
+ */
+const HLS_CELLS = 48;
+let connectionsValue = null; // the "Connexions" value of the open details, kept up to date between full redraws
+const hlsConnections = (s) => (s.status === 'downloading' && s.hlsActive ? s.hlsActive : s.connections);
+
+function drawHlsMap(s) {
+  const total = s.hlsTotal || 0;
+  const cells = Math.min(total, HLS_CELLS);
+  const map = $('d-map');
+  if (map.children.length !== cells) map.replaceChildren(...Array.from({ length: cells }, () => el('div', { style: 'flex:1' }, el('i'))));
+  const live = s.status === 'downloading' ? (s.hlsLive ?? []) : [];
+  [...map.children].forEach((cell, i) => {
+    const from = Math.floor((i * total) / cells);
+    const to = Math.floor(((i + 1) * total) / cells);
+    const f = s.status === 'completed' ? 1 : Math.max(0, Math.min(1, (s.hlsDone - from) / Math.max(1, to - from)));
+    cell.firstChild.style.width = `${f * 100}%`;
+    cell.classList.toggle('done', f >= 1);
+    cell.classList.toggle('live', live.some((n) => n >= from && n < to));
+  });
 }
 
 function renderDrawer(s) {
@@ -536,7 +563,12 @@ function renderDrawer(s) {
   $('d-eta').textContent = running && s.eta !== null ? fmtEta(s.eta) : '–';
 
   const segs = s.segments ?? [];
-  if (segs.length === 0 && s.kind === 'ytdlp') {
+  $('d-lanes-title').hidden = s.kind === 'hls'; // one line per connection would say nothing here: the count is under "Informations"
+  if (s.kind === 'hls') {
+    laneCount = -1;
+    drawHlsMap(s);
+    $('d-lanes').replaceChildren(...(s.hlsTotal ? [] : [el('p', { className: 'muted', textContent: 'Le découpage apparaît dès que la liste des segments est lue.', style: 'margin:0;font-size:12.5px' })]));
+  } else if (segs.length === 0 && s.kind === 'ytdlp') {
     // yt-dlp cuts the video into small fragments itself: show how many are done.
     laneCount = -1;
     const f = s.frag;
@@ -611,9 +643,9 @@ function renderDrawer(s) {
     dl.replaceChildren();
     infoRow(dl, 'Adresse', s.url);
     infoRow(dl, 'Dossier', s.dir);
-    infoRow(dl, 'Reprise', s.finalUrl ? (s.rangeOk ? 'Possible' : 'Non prise en charge par le serveur') : 'Vérifiée au démarrage');
+    infoRow(dl, 'Reprise', s.kind === 'hls' ? 'Possible' : s.finalUrl ? (s.rangeOk ? 'Possible' : 'Non prise en charge par le serveur') : 'Vérifiée au démarrage');
     infoRow(dl, 'Taille', s.size ? `${fmtBytes(s.size)} (${s.size.toLocaleString('fr-FR')} octets)` : 'Inconnue');
-    infoRow(dl, 'Connexions', String(segs.length || s.connections));
+    connectionsValue = infoRow(dl, 'Connexions', String(s.kind === 'hls' ? hlsConnections(s) : segs.length || s.connections));
     if (s.rangeOk && segs.length && s.size) infoRow(dl, 'Découpage', `${segs.length} segments d’environ ${fmtBytes(Math.ceil(s.size / segs.length))}`);
     infoRow(dl, 'Méthode', { hls: 'Flux vidéo (HLS), segments téléchargés puis assemblés', ytdlp: 'Vidéo de la page (yt-dlp)' }[s.kind] ?? (s.rangeOk ? 'Segments parallèles' : 'Flux unique'));
     infoRow(dl, 'Ajouté', fmtDate(s.createdAt));
@@ -629,6 +661,7 @@ function renderDrawer(s) {
     if (s.status === 'completed') {
       acts.push(textButton('open', 'Ouvrir', () => call(() => window.dm.open(s.id)), 'primary'));
       acts.push(textButton('folder', 'Dossier', () => call(() => window.dm.reveal(s.id))));
+      acts.push(textButton('retry', 'Re-télécharger', () => call(() => window.dm.redownload(s.id))));
     }
     acts.push(textButton('x', 'Retirer', () => call(() => window.dm.remove(s.id, s.status !== 'completed'))));
     if (s.status === 'completed') {
@@ -639,6 +672,11 @@ function renderDrawer(s) {
       );
     }
     $('d-actions').replaceChildren(...acts);
+  }
+  // The number of connections at work changes more often than the rest of the details are redrawn.
+  if (s.kind === 'hls' && connectionsValue?.isConnected) {
+    connectionsValue.textContent = String(hlsConnections(s));
+    connectionsValue.title = connectionsValue.textContent;
   }
 }
 
@@ -950,7 +988,24 @@ $('set-pick').addEventListener('click', async () => {
   const dir = await call(() => window.dm.pickDir());
   if (dir) $('set-dir').value = dir;
 });
-$('copy-token').addEventListener('click', () => call(() => window.dm.copyToken()));
+// "Copier" turns into "Copié" with a check for a moment, so the click visibly did something.
+const copyTokenBtn = $('copy-token');
+let copiedTimer = null;
+copyTokenBtn.addEventListener('click', async () => {
+  let copied = false;
+  await call(async () => {
+    await window.dm.copyToken();
+    copied = true;
+  });
+  if (!copied) return;
+  copyTokenBtn.replaceChildren(icon('check'), ' Copié');
+  copyTokenBtn.classList.add('copied');
+  clearTimeout(copiedTimer);
+  copiedTimer = setTimeout(() => {
+    copyTokenBtn.replaceChildren('Copier');
+    copyTokenBtn.classList.remove('copied');
+  }, 2000);
+});
 $('form-settings').addEventListener('submit', async (e) => {
   e.preventDefault();
   try {

@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('dm', {
   fileIcon: (id) => ipcRenderer.invoke('dm:fileIcon', id),
   pause: (id) => ipcRenderer.invoke('dm:pause', id),
   resume: (id) => ipcRenderer.invoke('dm:resume', id),
+  redownload: (id) => ipcRenderer.invoke('dm:redownload', id),
   remove: (id, deleteFile) => ipcRenderer.invoke('dm:remove', id, deleteFile),
   setLimit: (id, kbps) => ipcRenderer.invoke('dm:setLimit', id, kbps),
   reveal: (id) => ipcRenderer.invoke('dm:reveal', id),

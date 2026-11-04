@@ -19,6 +19,9 @@
     li button:disabled { opacity: .6; cursor: default; }
     .empty { padding: 18px 16px; opacity: .8; }
     #note { padding: 0 16px 12px; font-size: 12px; opacity: .75; }
+    footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 14px; border-top: 1px solid rgba(128,128,128,.3); font-size: 12px; }
+    footer button { border: 1px solid rgba(128,128,128,.5); background: transparent; color: inherit; border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+    #report { display: block; box-sizing: border-box; width: calc(100% - 28px); height: 90px; margin: 0 14px 12px; font: 11px monospace; }
   </style>
 </head>
 <body>
@@ -26,6 +29,11 @@
   <ul id="list"></ul>
   <p class="empty" id="empty" hidden>Aucune vidéo détectée sur cette page. Lancez la lecture : elle apparaîtra ici.</p>
   <p id="note"></p>
+  <footer>
+    <label><input type="checkbox" id="diag"> Mode diagnostic</label>
+    <button id="copy" hidden>Copier le diagnostic</button>
+  </footer>
+  <textarea id="report" readonly hidden></textarea>
   <script src="popup.js"></script>
 </body>
 </html>

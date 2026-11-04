@@ -173,8 +173,9 @@ class Download extends EventEmitter {
 
   _headers(url = this.state.finalUrl) {
     const h = { ...this._authHeaders(url) };
-    const { referer, cookie, userAgent } = this.state.headers ?? {};
+    const { referer, origin, cookie, userAgent } = this.state.headers ?? {};
     if (referer) h.Referer = referer;
+    if (origin) h.Origin = origin;
     if (cookie) h.Cookie = cookie;
     if (userAgent) h['User-Agent'] = userAgent;
     if (this.state.etag && !this.state.etag.startsWith('W/')) h['If-Range'] = this.state.etag;
@@ -265,9 +266,10 @@ class Download extends EventEmitter {
   }
 
   _baseHeaders(url = this.state.url) {
-    const { referer, cookie, userAgent } = this.state.headers ?? {};
+    const { referer, origin, cookie, userAgent } = this.state.headers ?? {};
     const h = { ...this._authHeaders(url) };
     if (referer) h.Referer = referer;
+    if (origin) h.Origin = origin; // the browser sent it with the stream: some hosts refuse a request without it
     if (cookie) h.Cookie = cookie;
     if (userAgent) h['User-Agent'] = userAgent;
     return h;

@@ -78,6 +78,7 @@ function createExtensionServer({ manager, token, onAdded = () => {}, onRequest =
           const str = (v) => (typeof v === 'string' ? v.slice(0, 8192) : '');
           const common = {
             referer: str(body.referer),
+            origin: str(body.origin),
             cookie: str(body.cookie),
             userAgent: str(body.userAgent),
           };
@@ -88,6 +89,7 @@ function createExtensionServer({ manager, token, onAdded = () => {}, onRequest =
           const opts = {
             ...common,
             filename: str(body.filename),
+            page: str(body.page), // the page the stream was found on, to reopen it when the link expires
             kind: ['hls', 'ytdlp'].includes(body.kind) ? body.kind : undefined,
             sniffed: body.sniffed === true,
           };

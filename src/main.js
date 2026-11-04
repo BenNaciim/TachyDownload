@@ -181,6 +181,7 @@ function registerIpc(token) {
 
   ipcMain.handle('dm:pause',(_e, id) => manager.pause(str(id, 100)));
   ipcMain.handle('dm:resume', (_e, id) => manager.resume(str(id, 100)));
+  ipcMain.handle('dm:redownload', (_e, id) => manager.redownload(str(id, 100)));
   ipcMain.handle('dm:setLimit', (_e, id, kbps) => manager.setTaskLimit(str(id, 100), Number(kbps)));
   ipcMain.handle('dm:remove', (_e, id, deleteFile) =>
     manager.remove(str(id, 100), { deleteFile: deleteFile === true }),
@@ -256,7 +257,7 @@ function registerIpc(token) {
     if (!entry || entry.req.kind !== 'ytdlp' || isPlaylistUrl(entry.req.url)) return { unavailable: true };
     if (!ytdlp) return { unavailable: true, error: 'yt-dlp n’est pas installé : ouvrez Paramètres → Vidéos.' };
     try {
-      return { ...(await probeVideo(ytdlp, entry.req.url, { deno: tools.find('deno'), cookies: manager.settings.ytCookies, proxy: manager.settings.proxy })), ffmpeg: Boolean(tools.find('ffmpeg')), maxHeight: manager.settings.videoMaxHeight };
+      return { ...(await probeVideo(ytdlp, entry.req.url, { deno: tools.find('deno'), cookies: manager.settings.ytCookies, proxy: manager.settings.proxy, headers: { referer: entry.req.referer, origin: entry.req.origin, userAgent: entry.req.userAgent } })), ffmpeg: Boolean(tools.find('ffmpeg')), maxHeight: manager.settings.videoMaxHeight };
     } catch (err) {
       return { unavailable: true, error: err.message };
     }
@@ -466,10 +467,11 @@ async function finishConfirm(entry, a) {
   entry.win.close();
   if (a.action === 'cancel') return;
   const { req } = entry;
-  const opts = { referer: req.referer, cookie: req.cookie, userAgent: req.userAgent, kind: req.kind === 'file' ? undefined : req.kind, sniffed: req.sniffed, paused: a.action === 'later' };
+  const opts = { referer: req.referer, origin: req.origin, page: req.page, cookie: req.cookie, userAgent: req.userAgent, kind: req.kind === 'file' ? undefined : req.kind, sniffed: req.sniffed, paused: a.action === 'later' };
   const name = typeof a.filename === 'string' ? a.filename.trim().slice(0, 255) : '';
   if (req.kind !== 'ytdlp' && name && (name !== entry.initialName || req.filename)) opts.filename = name;
   if (req.kind === 'ytdlp') opts.ytOpts = a.yt;
+  if (req.kind === 'ytdlp' && req.sniffed && req.filename) opts.filename = req.filename; // a manifest named after its page
   if (typeof a.dir === 'string' && a.dir && path.isAbsolute(a.dir)) {
     opts.dir = a.dir;
     opts.ownFolder = true;

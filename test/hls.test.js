@@ -13,8 +13,8 @@ const { tmpDir, randomBody, waitFor } = require('./helpers');
 const finished = (m, id) =>
   waitFor(() => ['completed', 'error'].includes(m.list().find((t) => t.id === id)?.status));
 
-/** Serves `routes` (path -> Buffer|string); `slowMs` delays segment answers. */
-function hlsServer(routes, { slowMs = 0 } = {}) {
+/** Serves `routes` (path -> Buffer|string); `slowMs` delays segment answers, `delays` (path -> ms) delays chosen ones. */
+function hlsServer(routes, { slowMs = 0, delays = {} } = {}) {
   const hits = [];
   const server = http.createServer((req, res) => {
     const p = req.url.split('?')[0];
@@ -28,7 +28,8 @@ function hlsServer(routes, { slowMs = 0 } = {}) {
       res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
       res.end(body);
     };
-    if (slowMs && p.startsWith('/seg')) setTimeout(send, slowMs);
+    const wait = delays[p] ?? (p.startsWith('/seg') ? slowMs : 0);
+    if (wait) setTimeout(send, wait);
     else send();
   });
   return new Promise((resolve) =>
@@ -165,5 +166,53 @@ test('HLS: pause then resume continues without re-downloading finished segments'
   } finally {
     await m.shutdown();
     await srv.close();
+  }
+});
+
+/** 12 small segments whose first one is held back for `holdMs`; the rest answer at once. */
+async function stalledFirstSegment(holdMs, managerOptions = {}) {
+  const segs = Array.from({ length: 12 }, () => randomBody(20_000));
+  const routes = { '/v.m3u8': media(segs.map((_, i) => `seg${i}.ts`)) };
+  segs.forEach((b, i) => (routes[`/seg${i}.ts`] = b));
+  const srv = await hlsServer(routes, { delays: { '/seg0.ts': holdMs } });
+  const dir = tmpDir();
+  const m = new DownloadManager({ settings: { dir, connections: 3 }, tickMs: 50, ...managerOptions });
+  m.start();
+  const t = m.add(`${srv.base}/v.m3u8`, { filename: 'clip' });
+  return { segs, srv, dir, m, t, close: async () => (await m.shutdown(), srv.close()) };
+}
+
+test('HLS: a slow segment does not keep the other connections from fetching ahead', async () => {
+  const { segs, srv, dir, m, t, close } = await stalledFirstSegment(1500);
+  try {
+    // With 3 connections a strict queue stops at the third segment until the first one arrives.
+    await waitFor(() => srv.hits.includes('/seg11.ts'), 1200);
+    const snap = m.list()[0];
+    assert.equal(snap.downloaded, 0, 'nothing can be written before the first segment');
+    assert.equal(snap.hlsTotal, 12);
+    assert.equal(snap.hlsDone, 0);
+    assert.ok(snap.hlsLive.includes(0) && snap.hlsLive.includes(11), `in progress or received: ${snap.hlsLive}`);
+    await finished(m, t.id);
+    const done = m.list()[0];
+    assert.equal(done.status, 'completed', done.error);
+    assert.deepEqual(fs.readFileSync(path.join(dir, done.filename)), Buffer.concat(segs), 'segments stay in order');
+  } finally {
+    await close();
+  }
+});
+
+test('HLS: what is received ahead of a stalled segment is capped, then the download still finishes', async () => {
+  // 20 kB segments and a 50 kB cap: after the first one stalls, only a few more may be taken ahead.
+  const { segs, srv, dir, m, t, close } = await stalledFirstSegment(1200, { hlsAheadBytes: 50_000 });
+  try {
+    await waitFor(() => srv.hits.includes('/seg3.ts'), 1000);
+    await new Promise((r) => setTimeout(r, 500)); // time for any over-eager fetch to show up
+    assert.ok(!srv.hits.includes('/seg8.ts'), `fetched far beyond the cap: ${srv.hits.join(' ')}`);
+    await finished(m, t.id);
+    const done = m.list()[0];
+    assert.equal(done.status, 'completed', done.error);
+    assert.deepEqual(fs.readFileSync(path.join(dir, done.filename)), Buffer.concat(segs));
+  } finally {
+    await close();
   }
 });
