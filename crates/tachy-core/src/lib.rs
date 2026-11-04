@@ -7,14 +7,17 @@
 /// Name shown in titles, notifications and the tray tooltip.
 pub const APP_NAME: &str = "Tachy Download";
 
+pub mod afterall;
 pub mod ctx;
 pub mod errors;
 pub mod filetypes;
 pub mod fsutil;
 pub mod limiter;
 pub mod manager;
+pub mod menu;
 pub mod net;
 pub mod probe;
+pub mod progress;
 pub mod rules;
 pub mod server;
 pub mod settings;
