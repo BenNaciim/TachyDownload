@@ -1,0 +1,59 @@
+# Réécriture Rust + Tauri : plan d'exécution (document vivant)
+
+Conception : [`../specs/2026-11-04-rust-tauri-rewrite-design.md`](../specs/2026-11-04-rust-tauri-rewrite-design.md) (validée). La conception dit *quoi* ; ce fichier dit *dans quel ordre* et *où on en est*. Il est mis à jour à chaque tâche terminée, pour que le travail survive à une coupure de session.
+
+## Règles de travail
+
+- Branche `rust-tauri`. `main` reste l'Electron 1.x tant que la 2.0.0 n'est pas à parité. Rien n'est poussé sur `main`, aucune étiquette ni release avant M7.
+- TDD pour tout code produit : test rouge (vu échouer pour la bonne raison), code minimal, test vert, suite complète du périmètre verte. Les sondes (S1 à S5) sont jetables et minimales.
+- Un commit local par tâche verte, messages en anglais comme le dépôt, fin de message : `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`. Branche poussée en fin de jalon.
+- Tant que le JS existe : `npm test` (152 tests) et `npm run lint` doivent rester verts. Les tests JS ne sont supprimés qu'une fois leur équivalent Rust vert (§7.2 de la conception).
+- Le comportement de référence est le code JS de `src/` et ses tests. En cas de doute, le JS gagne (parité, pas d'amélioration).
+- Les textes français sont repris mot pour mot (conception §5.5).
+- Tout résultat chiffré ou toute surprise va dans la conception §10.4 (preuves) ou dans le journal ci-dessous le jour même.
+
+## Commandes
+
+```bash
+cargo build -p tachy-download            # application (fenêtre Tauri)
+cargo test --workspace                   # tests Rust
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all --check
+npm test                                 # tests JS (Electron actuel, extension, pont)
+npm run lint
+npm run dist                             # installeur Electron 1.x (référence S0)
+```
+
+## Jalons
+
+### M0 Bases et preuves
+
+- [x] Branche `rust-tauri`, interface déplacée dans `ui/`, Electron repointé, 152 tests verts
+- [x] Pont `ui/renderer/dm-bridge.js` + `test/bridge.test.js` (9 tests)
+- [x] Workspace Cargo (CRT statique, outils épinglés) qui compile
+- [x] Fenêtre Tauri qui affiche l'interface avec un faux noyau (capture CDP : liste, graphique, événements `dm:update`)
+- [ ] S0 référence 1.2.0 : taille de l'installeur, RAM au repos, démarrage à froid, banc
+- [ ] S1 verre (acrylique) · S2 HTTP/1.1 Range sur le banc · S3 `safeStorage` `v10` · S4 installeur (installation, mise à jour, désinstallation) · S5 icônes et notifications
+- [ ] Résultats consignés en §10.4 de la conception ; document de parité créé
+
+### M1 Noyau (`crates/tachy-core`)
+
+Ordre (chaque module : tests JS portés d'abord, puis code) :
+
+- [ ] `util` (noms de fichiers, types, catégories) · `errors` · `fsutil`
+- [ ] `settings` (défauts, normalisation, fenêtres horaires) · `rules`
+- [ ] `limiter` (jetons) · `store` (`downloads.json`, écriture atomique, copie `.illisible`)
+- [ ] `net` (proxy, client HTTP/1.1, en-têtes, cookies, redirections) · `probe`
+- [ ] `task/http` (segments, vol, reprise, tentatives, connexions adaptatives, liens expirés)
+- [ ] `manager` (acteur : file, planification, nouvelles tentatives, `redownload`, `refresh`)
+- [ ] `api` (routes de l'extension, jeton, CORS) · instantané `list()`
+- [ ] Contrats : `tools/make-fixtures.js`, test Rust des fixtures ; banc `crates/tachy-core/examples/bench.rs` ≥ référence
+
+### M2 HLS · M3 Vidéos · M4 Coque · M5 Données et mise à jour · M6 Installeur · M7 Livraison
+
+Détail par jalon dans la conception §8. Les cases seront dépliées ici au début de chaque jalon.
+
+## Journal
+
+- 2026-11-04 : conception validée ; autorisation donnée de tout faire sans s'arrêter (installeur d'essai compris). M0 étapes 1 et 2 faites (`be9ffc1`).
+- 2026-11-04 : `rust-toolchain.toml` épingle `1.99.1` (rustup télécharge la chaîne au premier appel). `.cargo/config.toml` : `+crt-static`. Icônes lues depuis `build/` pour l'instant (déplacées en M7).

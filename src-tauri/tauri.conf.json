@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Tachy Download",
+  "version": "2.0.0",
+  "identifier": "local.downloadmanager.app",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Tachy Download",
+        "url": "renderer/index.html",
+        "width": 1200,
+        "height": 720,
+        "minWidth": 760,
+        "minHeight": 460,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["../build/icon.ico", "../build/icon.png"]
+  }
+}
