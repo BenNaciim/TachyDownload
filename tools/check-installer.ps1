@@ -51,7 +51,9 @@ $data = Join-Path $env:TEMP 'tachy-install-test-data'
 New-Item -ItemType Directory -Force $data | Out-Null
 $running = Start-Process $exe -ArgumentList "--data-dir=`"$data`"", '--hidden' -PassThru
 Start-Sleep 4
-Start-Process $Installer -ArgumentList "/S /UPDATE /R /ARGS `"--data-dir=```"$data```" --hidden`"" -Wait
+# No -Wait on Start-Process: it would also wait for the relaunched program, which never ends.
+$updater = Start-Process $Installer -ArgumentList "/S /UPDATE /R /ARGS `"--data-dir=```"$data```" --hidden`"" -PassThru
+$updater.WaitForExit(120000) | Out-Null
 Start-Sleep 6
 $after = @(Get-Process tachy-download -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $running.Id -and $_.Path -eq $exe })
 Check 'the old program was stopped' ($null -eq (Get-Process -Id $running.Id -ErrorAction SilentlyContinue))

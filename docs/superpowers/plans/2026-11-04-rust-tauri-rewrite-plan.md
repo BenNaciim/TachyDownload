@@ -85,9 +85,16 @@ Ordre (chaque module : tests JS portés d'abord, puis code) :
 - [x] Préférences d'interface (§6.3) : **remises à zéro une fois**, pas de dernière 1.x qui exporte (l'Electron installée est supprimée, aucune 1.x ne sera publiée)
 - [ ] À vérifier à la main : clic réel sur un toast, infobulle et progression de la barre des tâches ; la chaîne de mise à jour réelle ne se prouve qu'avec deux releases publiées (essai de l'installeur en M6, sans mise à jour réelle)
 
-### M6 Installeur · M7 Livraison
+### M6 Installeur (`src-tauri/windows/hooks.nsi`, `tools/release.js`, `tools/check-installer.ps1`, CI, docs)
 
-Détail par jalon dans la conception §8. Les cases seront dépliées ici au début de chaque jalon.
+- [x] Installeur NSIS Tauri : 4,37 Mio (objectif ≤ 25 Mio), `installMode: currentUser`, extension dans `resources\extension`, sélecteur de langue retiré (langue du système, enregistrée pour le désinstalleur), hooks : `--setup-tools` en fin d'installation, case « supprimer les données » étendue à `%APPDATA%\Tachy Download`
+- [x] `tools/check-installer.ps1` : installe en silencieux dans un dossier jetable, vérifie fichiers, raccourcis, entrée de désinstallation, lance `ui.test.js` et `shell.test.js` contre le programme installé, met à jour par-dessus un programme en cours (`/S /UPDATE /R`), désinstalle, vérifie que les données restent
+- [x] `tools/release.js` (versions de `package.json`, `package-lock.json`, `extension/manifest.json`, `Cargo.toml`, `tauri.conf.json` ; tests Rust + Node ; `tauri build` ; copie en `Tachy-Download-Setup-<version>.exe`), `npm run dist`, CI `test.yml` (fmt, clippy -D warnings, tests, lint, tests pilotés) et `release.yml` (non exécutables ici), `docs/BUILD.md` et `BUILD.fr.md`
+- [ ] README (structure du dépôt) : en M7, avec la suppression du code Electron
+
+### M7 Livraison
+
+Détail dans la conception §8. Les cases seront dépliées ici au début du jalon.
 
 ## Journal
 
@@ -99,3 +106,8 @@ Détail par jalon dans la conception §8. Les cases seront dépliées ici au dé
 - 2026-11-04 : `rust-toolchain.toml` épingle `1.99.1` (rustup télécharge la chaîne au premier appel). `.cargo/config.toml` : `+crt-static`. Icônes lues depuis `build/` pour l'instant (déplacées en M7).
 - 2026-11-04 : M4 : une instance de test tuée sans son arbre de processus laisse des `msedgewebview2.exe` qui gardent le dossier de données de WebView2 ; l'instance suivante (autre port de débogage) ne répond plus. `test/app.js` met donc un délai aux requêtes CDP, et les tests tuent l'arbre (`taskkill /T /F`). Sous Tauri, `window.close()` n'existe pas côté page : la fermeture d'une fenêtre se teste par WM_CLOSE (`win.ps1`).
 - 2026-11-04 : M5 : le test d'ancien `shell.test.js` « pause affichée aussitôt » passait déjà : `Task::stop` positionne l'état avant d'attendre la fin du transfert. Le format des secrets passe à `base64(blob DPAPI)` ; un secret `v10` est reconnu à son préfixe et réécrit au premier démarrage.
+- 2026-11-04 : M6 : le verre. `--disable-gpu-compositing` coûtait 8 à 10 % d'un cœur au repos (Electron : 0,1 %) ; retiré avec le matériau système de Windows 11 appliqué directement (§10.4, S1 revu). Les changements de style à chaud ne laissent plus de couches à moitié peintes (24 changements, contraste mesuré identique).
+- 2026-11-04 : M6 : McAfee (`mc-fw-host`) garde ouvert l'exécutable installé ; la vérification « appli en cours » du gabarit (Restart Manager) y voit une appli non fermable et abandonne : installation par-dessus, mise à jour silencieuse et désinstallation échouaient. Contournement dans les hooks : arrêt de l'appli puis renommage de l'ancien exécutable avant la vérification, suppression du `.old` à la fin. Le désinstalleur demandait aussi la langue (boîte « Installer Language ») faute de valeur enregistrée : le hook l'écrit.
+- 2026-11-04 : M6 : l'icône de type de fichier de la fenêtre de confirmation manquait par intermittence (5 essais sur 8 en release) : `SHGetFileInfo` répond parfois « succès, sans icône » juste après le démarrage. Relances (8 fois, 100 ms) ; 12 essais sur 12 ensuite.
+- 2026-11-04 : `Start-Process -Wait` attend aussi les processus lancés par l'installeur (l'appli relancée par `/R`) : ne pas l'utiliser pour l'installeur en mode mise à jour.
+- 2026-11-04 : M6 terminé. `check-installer.ps1` passe en entier sur l'installeur final (4,37 Mio) : installation, 12 tests pilotés contre le programme installé, mise à jour par-dessus un programme en cours (ancien arrêté, relancé, pas de `.old`, une seule entrée), désinstallation, données conservées. Mesure du build final (médiane de 3, `measure-app.js`) : démarrage à froid 565 ms, mémoire 217 Mio (7 à 9 processus), CPU au repos 2,1 % ; Electron : environ 990 ms, 207 Mio, 0,1 %. Non vérifiés ici : les workflows CI, la case « supprimer les données » du désinstalleur en mode graphique.

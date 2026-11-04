@@ -39,6 +39,10 @@ Steps for Windows.
 
 `tauri build --bundles nsis` compiles the app in release mode (`cargo build --release`, with link-time optimisation: the first build takes several minutes), then wraps `tachy-download.exe` in an NSIS installer. The user interface in `ui/` is embedded in the program; the browser extension is copied to `resources\extension` next to it. The configuration is `src-tauri/tauri.conf.json`; `src-tauri/windows/hooks.nsi` makes the installer download yt-dlp, Deno and ffmpeg at the end of the install (`--setup-tools`) and lets the "delete the data" box of the uninstaller also remove `%APPDATA%\Tachy Download`.
 
+## Checking the installer
+
+`powershell -File tools\check-installer.ps1 "target\release\bundle\nsis\Tachy Download_<version>_x64-setup.exe"` installs it silently into a throwaway folder, checks the files, the shortcuts and the uninstall entry, runs the browser-driven tests against the installed program, applies the installer again over a running program the way the app's updater does (`/S /UPDATE /R`), then uninstalls and checks that the data folder is untouched. It adds and removes the current user's shortcuts like a real install.
+
 ## Changing the version
 
 The release script does it: `npm run release -- patch|minor|major|x.y.z` updates `package.json`, `package-lock.json`, `extension/manifest.json`, `Cargo.toml` and `src-tauri/tauri.conf.json`. By hand, change the same five places.
