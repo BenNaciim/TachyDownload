@@ -8,3 +8,17 @@ rust-version.workspace = true
 repository.workspace = true
 
 [dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "fs", "net", "process", "io-util"] }
+tokio-util = "0.7"
+# HTTP/1.1 only (no "http2" feature): one TCP connection per range is what makes the segments parallel.
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "stream"] }
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"
+regex = "1"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
