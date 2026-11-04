@@ -385,11 +385,16 @@ impl Task {
             s.etag = info.etag;
             s.last_modified = info.last_modified;
             if !s.filename_locked {
+                // The name is taken and reserved (an empty .part file) in one go, so that two downloads of the
+                // same name cannot both pick it.
+                let _naming = lock(&self.ctx.naming);
+                std::fs::create_dir_all(&s.dir)?;
                 let free = unique_path(std::path::Path::new(&s.dir), &info.filename, false);
                 s.filename = free
                     .file_name()
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or(info.filename);
+                std::fs::write(self.part_path_of(&s), b"")?;
             }
         }
         let (dir, part, size, range_ok, has_segments, connections) = {
@@ -501,11 +506,11 @@ impl Task {
                 let r = joined.unwrap_or_else(|e| {
                     Err(Fail::Error(TaskError::new(format!("Erreur interne : {e}"))))
                 });
-                if let Err(f) = r {
-                    if first.is_none() {
-                        first = Some(f);
-                        workers_cancel.cancel(); // the others have no use going on
-                    }
+                if let Err(f) = r
+                    && first.is_none()
+                {
+                    first = Some(f);
+                    workers_cancel.cancel(); // the others have no use going on
                 }
             }
             if let Some(fail) = first {
@@ -602,7 +607,7 @@ impl Task {
         }
         let v = victim?;
         let g = segs[v];
-        let mid = g.pos + (g.end - g.pos + 1) / 2;
+        let mid = g.pos + (g.end - g.pos).div_ceil(2);
         segs[v].end = mid - 1;
         segs.insert(
             v + 1,

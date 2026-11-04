@@ -54,10 +54,11 @@ pub fn settle_finished(
     let mut target = from.to_path_buf();
     if !same_path(&wanted, from) {
         let mut placed = None;
-        if let Some(replaces) = &s.replaces {
-            if same_path(Path::new(replaces), &wanted) && std::fs::rename(from, &wanted).is_ok() {
-                placed = Some(wanted.clone()); // replaces the old file in one step
-            }
+        if let Some(replaces) = &s.replaces
+            && same_path(Path::new(replaces), &wanted)
+            && std::fs::rename(from, &wanted).is_ok()
+        {
+            placed = Some(wanted.clone()); // replaces the old file in one step
         }
         target = match placed {
             Some(p) => p,

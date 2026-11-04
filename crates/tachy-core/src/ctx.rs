@@ -42,6 +42,9 @@ pub struct Ctx {
     rules: Mutex<(String, Vec<Rule>)>,
     pub events: broadcast::Sender<Event>,
     pub dirty: Notify,
+    /// Held while a download picks its file name and reserves it with its .part file, so two downloads of the
+    /// same name never pick the same one.
+    pub naming: Mutex<()>,
     pub tx: mpsc::UnboundedSender<Msg>,
 }
 
@@ -61,6 +64,7 @@ impl Ctx {
             rules: Mutex::new((String::new(), Vec::new())),
             events,
             dirty: Notify::new(),
+            naming: Mutex::new(()),
             tx,
         })
     }

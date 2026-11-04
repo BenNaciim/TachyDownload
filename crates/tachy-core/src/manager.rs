@@ -271,10 +271,10 @@ impl Manager {
                 state.status = Status::Paused;
             }
             // A finished download never needs its session cookie again (older versions kept it on disk).
-            if state.status == Status::Completed {
-                if let Some(h) = &mut state.headers {
-                    h.cookie.clear();
-                }
+            if state.status == Status::Completed
+                && let Some(h) = &mut state.headers
+            {
+                h.cookie.clear();
             }
             self.register(state);
         }
@@ -432,10 +432,10 @@ impl Manager {
         if kind == Kind::Ytdlp {
             state.yt_opts = opts.yt_opts.clone();
             // A manifest the extension found has no title of its own ("manifest"): the file takes the name of the page.
-            if opts.sniffed {
-                if let Some(f) = opts.filename.as_deref().filter(|f| !f.is_empty()) {
-                    state.out_name = Some(sanitize_filename(f));
-                }
+            if opts.sniffed
+                && let Some(f) = opts.filename.as_deref().filter(|f| !f.is_empty())
+            {
+                state.out_name = Some(sanitize_filename(f));
             }
         }
         if state.dir.is_empty() {

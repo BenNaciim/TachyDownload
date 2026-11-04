@@ -138,10 +138,10 @@ impl Net {
             .redirect(reqwest::redirect::Policy::limited(20))
             .user_agent("Tachy Download")
             .no_proxy();
-        if !proxy.is_empty() {
-            if let Ok(p) = reqwest::Proxy::all(proxy) {
-                b = b.proxy(p);
-            }
+        if !proxy.is_empty()
+            && let Ok(p) = reqwest::Proxy::all(proxy)
+        {
+            b = b.proxy(p);
         }
         let client = b.build().expect("the HTTP client could not be built");
         Self {

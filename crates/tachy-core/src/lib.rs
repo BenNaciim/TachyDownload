@@ -16,6 +16,7 @@ pub mod manager;
 pub mod net;
 pub mod probe;
 pub mod rules;
+pub mod server;
 pub mod settings;
 pub mod state;
 pub mod store;

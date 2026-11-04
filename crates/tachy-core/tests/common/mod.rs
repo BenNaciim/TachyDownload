@@ -283,7 +283,7 @@ pub async fn wait_for(what: &str, ms: u64, mut f: impl FnMut() -> bool) {
     panic!("wait_for: délai dépassé ({what})");
 }
 
-pub fn make_manager(dir: &PathBuf, settings: serde_json::Value) -> Manager {
+pub fn make_manager(dir: &std::path::Path, settings: serde_json::Value) -> Manager {
     let mut s = settings;
     s["dir"] = serde_json::json!(dir.to_string_lossy());
     let m = Manager::new(ManagerConfig {

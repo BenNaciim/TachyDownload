@@ -101,7 +101,7 @@ pub fn filename_from_content_disposition(header: &str) -> Option<String> {
 
 pub fn filename_from_url(url: &str) -> Option<String> {
     let u = url::Url::parse(url).ok()?;
-    let last = u.path().split('/').filter(|s| !s.is_empty()).next_back()?;
+    let last = u.path().split('/').rfind(|s| !s.is_empty())?;
     Some(safe_decode(last))
 }
 
