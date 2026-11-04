@@ -19,7 +19,7 @@
         "minHeight": 460,
         "center": true,
         "transparent": true,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-gpu-compositing",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection",
         "create": false
       }
     ],

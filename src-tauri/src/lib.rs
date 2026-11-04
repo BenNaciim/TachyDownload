@@ -24,15 +24,14 @@ use tachy_core::manager::{Manager, ManagerConfig};
 use tachy_core::server::{AddRequest, ServerConfig, listen};
 use tachy_core::state::Status;
 use tachy_core::tools::Tools;
-use tauri::window::{Effect, EffectsBuilder};
 use tauri::{AppHandle, Manager as _, RunEvent, WebviewWindowBuilder, WindowEvent};
 
 use shell::{Shell, glass_supported, show_window};
 
-/// Every window of the app shares one web view environment, so they all share these arguments. The flag turns off
-/// GPU compositing, which the acrylic backdrop needs to show through (proof S1).
-pub const BROWSER_ARGS: &str =
-    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-gpu-compositing";
+/// Every window of the app shares one web view environment, so they all share these arguments. GPU compositing stays
+/// on: the glass is the window's own system backdrop (`shell::apply_glass`), and forcing software compositing
+/// instead made the web view burn about 9 % of a core at rest (measured, design §10.4).
+pub const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection";
 
 /// The pages of the app, and nothing else: a link that leaves them is never followed.
 pub fn is_app_url(url: &tauri::Url) -> bool {
@@ -296,7 +295,7 @@ fn start(app: &AppHandle, dir: PathBuf, hidden: bool) -> Result<(), Box<dyn std:
         .build()?;
     if glass {
         // The same acrylic backdrop as Electron's `backgroundMaterial: 'acrylic'`.
-        window.set_effects(EffectsBuilder::new().effect(Effect::Acrylic).build())?;
+        shell::apply_glass(&window)?;
     }
     menu::rebuild(app);
     tray::create(app)?;

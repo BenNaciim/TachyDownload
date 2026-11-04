@@ -6,3 +6,14 @@
   ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --setup-tools' $0
   DetailPrint "Video tools: done (code $0)"
 !macroend
+
+; The template's "delete the application data" box only targets the folders named after the app identifier. Our
+; downloads list, settings, logins and tools live in %APPDATA%\Tachy Download: when the box is ticked (and this is
+; not an update), they go too. Without the box they stay, as with the Electron version.
+!macro NSIS_HOOK_POSTUNINSTALL
+  ${If} $DeleteAppDataCheckboxState = 1
+  ${AndIf} $UpdateMode <> 1
+    SetShellVarContext current
+    RmDir /r "$APPDATA\Tachy Download"
+  ${EndIf}
+!macroend

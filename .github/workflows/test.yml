@@ -1,6 +1,8 @@
 name: Tests
 
-# Runs the test suite on every push and pull request, so a regression shows up before a release.
+# Runs the whole suite on every push and pull request, so a regression shows up before a release:
+# the Rust engine and shell (format, lints as errors, tests), then the browser-driven tests of the real app and
+# the extension's tests.
 on:
   push:
     branches: [main]
@@ -8,6 +10,9 @@ on:
 
 permissions:
   contents: read
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   test:
@@ -21,6 +26,21 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # rust-toolchain.toml pins the compiler; rustup installs it on the first call.
+      - run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
+
+      # `spikes/` are throwaway probes kept only until the rewrite is merged: they are not part of the product.
+      - run: cargo fmt -p tachy-core -p tachy-download -- --check
+
+      - run: cargo clippy -p tachy-core -p tachy-download --all-targets -- -D warnings
+
+      - run: cargo test -p tachy-core -p tachy-download
+
+      # The binary the browser-driven tests (test/*.test.js) launch.
+      - run: cargo build -p tachy-download
 
       - run: npm run lint
 

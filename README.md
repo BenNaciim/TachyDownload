@@ -4,7 +4,7 @@
 
 A fast download manager for Windows: parallel segments, resume, queue, YouTube and HLS video, and a Chrome, Edge and Firefox extension. Open source, no ads, no account.
 
-Built from scratch with Electron and Node.js on plain HTTP (`Range`, `Content-Range`, `If-Range`).
+Built from scratch in Rust (engine) and Tauri 2 (window, menu, tray) on plain HTTP (`Range`, `Content-Range`, `If-Range`).
 
 ## Features
 
@@ -43,11 +43,11 @@ The installer is not code-signed: Windows SmartScreen shows "Windows protected y
 
 ```bash
 npm install
-npm start
-npm test
+cargo run -p tachy-download
+cargo test -p tachy-core -p tachy-download
 ```
 
-To build the installer (see [docs/BUILD.md](docs/BUILD.md)), `npm run dist` produces `dist/Tachy-Download-Setup-<version>.exe`. To change the icon, edit `tools/make-icon.js` and run `npm run icon`.
+The browser-driven tests (`npm test`) launch the debug build: run `cargo build -p tachy-download` first. To build the installer (see [docs/BUILD.md](docs/BUILD.md)), `npm run dist` produces it in `target/release/bundle/nsis/`. To change the icon, edit `tools/make-icon.js` and run `npm run icon`.
 
 Downloads go to your Downloads folder by default. Settings and the download list are stored in the app's data folder.
 

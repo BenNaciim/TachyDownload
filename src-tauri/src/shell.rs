@@ -93,6 +93,31 @@ pub fn glass_supported() -> bool {
     windows_build() >= 22621
 }
 
+/// The Windows 11 acrylic backdrop, as the system material of the window (DWMWA_SYSTEMBACKDROP_TYPE = transient
+/// window), the way Electron's `backgroundMaterial: 'acrylic'` does it. Tauri's own `Effect::Acrylic` uses the older
+/// per-window accent, which with software compositing keeps the GPU process busy (about 9 % of a core at rest).
+#[cfg(windows)]
+pub fn apply_glass(window: &tauri::WebviewWindow) -> Result<(), String> {
+    use windows::Win32::Graphics::Dwm::{DWM_SYSTEMBACKDROP_TYPE, DWMWA_SYSTEMBACKDROP_TYPE, DwmSetWindowAttribute};
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+    let transient_window = DWM_SYSTEMBACKDROP_TYPE(3);
+    // SAFETY: `hwnd` is this window's handle; the value is a 4-byte DWM_SYSTEMBACKDROP_TYPE, the size passed.
+    unsafe {
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_SYSTEMBACKDROP_TYPE,
+            &transient_window as *const _ as *const std::ffi::c_void,
+            std::mem::size_of::<DWM_SYSTEMBACKDROP_TYPE>() as u32,
+        )
+    }
+    .map_err(|e| e.to_string())
+}
+
+#[cfg(not(windows))]
+pub fn apply_glass(_: &tauri::WebviewWindow) -> Result<(), String> {
+    Ok(())
+}
+
 #[cfg(windows)]
 fn windows_build() -> u32 {
     #[repr(C)]
