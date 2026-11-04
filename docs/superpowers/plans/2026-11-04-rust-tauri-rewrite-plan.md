@@ -52,7 +52,15 @@ Ordre (chaque module : tests JS portés d'abord, puis code) :
 - [x] Banc `examples/bench.rs` : 2,7× à 11× Node, CPU 25-30 %, 49 Mio (conception §10.4)
 - [ ] Reporté aux jalons qui les portent : `after_complete` / doublons / extraction (M5), `afterall` (M5)
 
-### M2 HLS · M3 Vidéos · M4 Coque · M5 Données et mise à jour · M6 Installeur · M7 Livraison
+### M2 HLS (`crates/tachy-core/src/task/hls.rs`)
+
+- [x] Playlists (maître, média, AES-128, `EXT-X-MAP`), refus du DRM et des directs, IV explicite ou numéro de séquence
+- [x] Avance hors ordre plafonnée (`hls_ahead_bytes`, 128 Mio), reprise sans retélécharger, progression et `hlsLive` pour la vue détaillée
+- [x] Conversion ffmpeg (`Manager::set_ffmpeg`), repli sur le fichier brut
+- [x] `tests/hls.rs` (7 tests portés + 4 unitaires) ; contrat d'instantané HLS identique au JS (exemption retirée de `contract.rs`)
+- [x] Vidéo réelle de bout en bout : flux Apple bipbop (100 segments, 598 Mo, 18,7 s) ; conversion mp4 avec le vrai ffmpeg sur un flux généré (`tests/hls_real.rs`, `--ignored`)
+
+### M3 Vidéos · M4 Coque · M5 Données et mise à jour · M6 Installeur · M7 Livraison
 
 Détail par jalon dans la conception §8. Les cases seront dépliées ici au début de chaque jalon.
 

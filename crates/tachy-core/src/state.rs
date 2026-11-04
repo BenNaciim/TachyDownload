@@ -98,7 +98,7 @@ pub struct TaskState {
     pub post_done: Option<bool>,
     // Kinds other than plain files keep their own bookkeeping here until their modules type it (M2, M3).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub hls: Option<Value>,
+    pub hls: Option<HlsProgress>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ytd: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -119,9 +119,21 @@ pub struct TaskState {
     pub extra: Map<String, Value>,
 }
 
+/// How far an HLS download has got: segments written in order, bytes written, segments in the playlist.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HlsProgress {
+    pub next: u64,
+    pub bytes: u64,
+    pub total: u64,
+}
+
 impl TaskState {
-    /// Bytes written so far, over every segment.
+    /// Bytes written so far, over every segment (for a stream: the bytes written in order).
     pub fn downloaded(&self) -> u64 {
+        if self.kind == Kind::Hls {
+            return self.hls.map_or(0, |h| h.bytes);
+        }
         self.segments
             .as_ref()
             .map_or(0, |s| s.iter().map(|g| g.pos.saturating_sub(g.start)).sum())

@@ -32,15 +32,6 @@ async fn settings_come_out_the_same_as_in_the_javascript_engine() {
 
 /// Differences that belong to a later milestone: the HLS module adds its progress fields and its single segment
 /// (M2). Delete this list when M2 lands.
-const PENDING_HLS: [&str; 6] = [
-    "hlsActive",
-    "hlsDone",
-    "hlsLive",
-    "hlsProgress",
-    "hlsTotal",
-    "segments",
-];
-
 /// A field the JavaScript engine writes as `null` and the Rust one leaves out (or the reverse) reads the same in
 /// the window: both are "nothing".
 fn same_value(a: &Value, b: &Value) -> bool {
@@ -53,13 +44,9 @@ fn same_value(a: &Value, b: &Value) -> bool {
 /// Compares two task snapshots field by field, so a failure says which field differs.
 fn same_task(name: &str, js: &Value, rust: &Value) -> Vec<String> {
     let mut problems = vec![];
-    let pending = js["kind"] == "hls";
     let (jo, ro) = (js.as_object().unwrap(), rust.as_object().unwrap());
     let all: std::collections::BTreeSet<&String> = jo.keys().chain(ro.keys()).collect();
     for k in all {
-        if pending && PENDING_HLS.contains(&k.as_str()) {
-            continue;
-        }
         let (j, r) = (
             jo.get(k).unwrap_or(&Value::Null),
             ro.get(k).unwrap_or(&Value::Null),

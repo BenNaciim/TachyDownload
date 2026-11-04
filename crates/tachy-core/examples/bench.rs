@@ -143,5 +143,6 @@ async fn main() {
     }
     println!("Pic mémoire du processus moteur : {:.0} Mio", peak_mib());
     let _ = srv.kill();
+    let _ = srv.wait();
     let _ = std::fs::remove_dir_all(base);
 }

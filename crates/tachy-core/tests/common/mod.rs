@@ -35,6 +35,8 @@ pub struct Resp {
     pub pace: Option<(usize, Duration)>,
     /// Stop after this many body bytes and close the connection (a dropped stream).
     pub cut_after: Option<usize>,
+    /// Wait this long before answering.
+    pub delay: Option<Duration>,
 }
 
 impl Resp {
@@ -47,6 +49,7 @@ impl Resp {
             to: 0,
             pace: None,
             cut_after: None,
+            delay: None,
         }
     }
 }
@@ -161,6 +164,9 @@ async fn connection(mut sock: TcpStream, handler: Handler, requests: Arc<Mutex<V
         };
         requests.lock().unwrap().push(req.clone());
         let resp = handler(&req);
+        if let Some(d) = resp.delay {
+            tokio::time::sleep(d).await;
+        }
         let len = resp.to - resp.from;
         let mut out = format!("HTTP/1.1 {} X\r\n", resp.status);
         let mut has_len = false;
@@ -227,6 +233,7 @@ pub fn ranged(body: &Arc<Vec<u8>>, req: &Req, ranges: bool, disposition: Option<
         to,
         pace: None,
         cut_after: None,
+        delay: None,
     }
 }
 

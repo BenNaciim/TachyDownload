@@ -19,6 +19,8 @@ use tokio::sync::Notify;
 use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::sync::CancellationToken;
 
+mod hls;
+
 pub const MIN_SEGMENT: u64 = 1024 * 1024;
 /// Only a segment with more than this left is worth splitting.
 pub const MIN_STEAL: u64 = 2 * 1024 * 1024;
@@ -111,6 +113,8 @@ pub struct Task {
     samples: std::sync::Mutex<VecDeque<(Instant, u64)>>,
     conc: std::sync::Mutex<Conc>,
     wake: Notify,
+    /// HLS: segments in flight and received ahead, for the details view.
+    hls_live: std::sync::Mutex<Option<hls::Live>>,
 }
 
 impl Task {
@@ -135,6 +139,7 @@ impl Task {
                 last_throttle: Instant::now(),
             }),
             wake: Notify::new(),
+            hls_live: std::sync::Mutex::new(None),
         })
     }
 
@@ -198,12 +203,16 @@ impl Task {
         if let Some(h) = &mut state.headers {
             h.cookie.clear(); // the window has no use for the cookie
         }
+        let mut more = serde_json::Map::new();
+        if state.kind == Kind::Hls {
+            self.hls_snapshot(&mut state, downloaded, &mut more);
+        }
         Snapshot {
             state,
             downloaded,
             speed,
             eta,
-            more: Default::default(),
+            more,
         }
     }
 
@@ -358,7 +367,8 @@ impl Task {
         let kind = lock(&self.state).kind;
         match kind {
             Kind::File => self.run_http(cancel).await,
-            Kind::Hls | Kind::Ytdlp => Err(Fail::Error(TaskError::fatal(
+            Kind::Hls => self.run_hls(cancel).await,
+            Kind::Ytdlp => Err(Fail::Error(TaskError::fatal(
                 "Ce type de téléchargement n’est pas encore pris en charge",
             ))),
         }

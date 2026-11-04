@@ -28,6 +28,8 @@ pub struct ManagerConfig {
     pub tick_ms: u64,
     pub retry_delays: Vec<f64>,
     pub site_auth: Option<SiteAuth>,
+    /// HLS: how many bytes may be received ahead of the segment being waited for (128 MiB when unset).
+    pub hls_ahead_bytes: Option<u64>,
 }
 
 impl Default for ManagerConfig {
@@ -38,6 +40,7 @@ impl Default for ManagerConfig {
             tick_ms: 1000,
             retry_delays: RETRY_DELAYS.to_vec(),
             site_auth: None,
+            hls_ahead_bytes: None,
         }
     }
 }
@@ -135,6 +138,10 @@ impl Manager {
         let net = Net::new(&settings.proxy);
         let (tx, rx) = mpsc::unbounded_channel();
         let ctx = Ctx::new(settings, net, cfg.site_auth, tx);
+        if let Some(n) = cfg.hls_ahead_bytes {
+            ctx.hls_ahead_bytes
+                .store(n, std::sync::atomic::Ordering::Relaxed);
+        }
         let m = Manager {
             inner: Arc::new(Inner {
                 ctx,
@@ -154,6 +161,16 @@ impl Manager {
 
     pub fn settings(&self) -> Settings {
         self.inner.ctx.settings()
+    }
+
+    /// Tells the downloads where ffmpeg is (it appears once the video tools are installed).
+    pub fn set_ffmpeg(&self, f: crate::ctx::FfmpegPath) {
+        *self
+            .inner
+            .ctx
+            .ffmpeg
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = Some(f);
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {

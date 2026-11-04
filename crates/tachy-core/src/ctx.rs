@@ -33,6 +33,9 @@ pub enum Msg {
 /// Extra request headers for the site an address belongs to (a saved login), or none.
 pub type SiteAuth = Arc<dyn Fn(&str) -> Option<Headers> + Send + Sync>;
 
+/// Where ffmpeg is, when the video tools are installed.
+pub type FfmpegPath = Arc<dyn Fn() -> Option<PathBuf> + Send + Sync>;
+
 pub struct Ctx {
     pub settings: RwLock<Settings>,
     /// The limit in force (KB/s): what tasks that run other programs pass on.
@@ -42,6 +45,9 @@ pub struct Ctx {
     rules: Mutex<(String, Vec<Rule>)>,
     pub events: broadcast::Sender<Event>,
     pub dirty: Notify,
+    pub ffmpeg: RwLock<Option<FfmpegPath>>,
+    /// HLS: bytes received out of turn that may wait in memory to be written.
+    pub hls_ahead_bytes: std::sync::atomic::AtomicU64,
     /// Held while a download picks its file name and reserves it with its .part file, so two downloads of the
     /// same name never pick the same one.
     pub naming: Mutex<()>,
@@ -64,6 +70,8 @@ impl Ctx {
             rules: Mutex::new((String::new(), Vec::new())),
             events,
             dirty: Notify::new(),
+            ffmpeg: RwLock::new(None),
+            hls_ahead_bytes: std::sync::atomic::AtomicU64::new(128 * 1024 * 1024),
             naming: Mutex::new(()),
             tx,
         })
@@ -74,6 +82,14 @@ impl Ctx {
             .read()
             .unwrap_or_else(|e| e.into_inner())
             .clone()
+    }
+
+    pub fn ffmpeg(&self) -> Option<PathBuf> {
+        self.ffmpeg
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .and_then(|f| f())
     }
 
     pub fn net(&self) -> Net {
