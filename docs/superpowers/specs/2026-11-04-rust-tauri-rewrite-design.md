@@ -439,6 +439,8 @@ Le serveur a vu exactement N connexions TCP pour N plages (plus une pour le `HEA
 
 **S5 notification : demi-GO.** `tauri-winrt-notification` 0.8.1 expose `Toast::on_activated` (le plugin officiel `tauri-plugin-notification` ne l'expose pas : on utilisera la crate directement, comme prévu) et `app_id` pour l'identité (nom et icône de l'appli installée via l'AUMID du raccourci, que le modèle NSIS de Tauri 2.10 écrit déjà). Le clic réel sur un toast n'est pas automatisable sans piloter l'interface de Windows : il reste à vérifier à la main en M5 avec l'appli installée. Repli décidé : notification sans clic (le dossier s'ouvre depuis la liste).
 
+**M1 Banc du vrai noyau Rust : barrière franchie.** `crates/tachy-core/examples/bench.rs` (build release) contre `tools/bench/server.js`, 1 Gio, dans la même session que le banc Node refait. Débit stable à 1 / 8 / 16 connexions : **1 094 / 1 974 / 1 813 Mo/s** contre Node **398 / 361 / 162 Mo/s** (2,7×, 5,5× et 11×). CPU par Gio (user + noyau) : Rust 1,07 / 1,27 / 1,19 s contre Node 4,22 / 4,17 / 5,32 s, soit 25 à 30 % de celui de Node (objectif ≤ 60 %). Mémoire du processus moteur au pic : 49 Mio contre 157 Mo de RSS pour Node (objectif ≤ 100 Mio). Pour mémoire, `curl` vers un fichier fait 565 Mo/s sur ce serveur : le moteur Rust le dépasse parce que les segments sont écrits en parallèle.
+
 ### 10.5 Questions ouvertes
 
 Aucune ne bloque le démarrage. À confirmer : si d'autres personnes que toi ont la 1.x installée, elles ne seront pas mises à jour en place (§6.4, point 7).

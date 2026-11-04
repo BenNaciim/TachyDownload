@@ -43,14 +43,14 @@ npm run dist                             # installeur Electron 1.x (référence 
 
 Ordre (chaque module : tests JS portés d'abord, puis code) :
 
-- [ ] `util` (noms de fichiers, types, catégories) · `errors` · `fsutil`
-- [ ] `settings` (défauts, normalisation, fenêtres horaires) · `rules`
-- [ ] `limiter` (jetons) · `store` (`downloads.json`, écriture atomique, copie `.illisible`)
-- [ ] `net` (proxy, client HTTP/1.1, en-têtes, cookies, redirections) · `probe`
-- [ ] `task/http` (segments, vol, reprise, tentatives, connexions adaptatives, liens expirés)
-- [ ] `manager` (acteur : file, planification, nouvelles tentatives, `redownload`, `refresh`)
-- [ ] `api` (routes de l'extension, jeton, CORS) · instantané `list()`
-- [ ] Contrats : `tools/make-fixtures.js`, test Rust des fixtures ; banc `crates/tachy-core/examples/bench.rs` ≥ référence
+- [x] `util` · `errors` · `fsutil` · `filetypes` (table identique à `ui/shared/filetypes.js`, testée)
+- [x] `settings` · `rules` · `limiter` · `store`
+- [x] `net` · `probe` · `task` (segments, vol, reprise, tentatives, connexions adaptatives, liens expirés) · `manager`
+- [x] `server` (API de l'extension, jeton, CORS, 413, `Connection: close`)
+- [x] Tests portés : engine (11), features = tasklimit + cookies + siteauth + refresh + redownload fichiers (15), network = steal + retry + proxy + limites + 429 + isWebPage (14), server (7). Les cas HLS, yt-dlp, afterdownload, afterall viennent avec leurs modules
+- [x] Contrats : `tools/make-fixtures.js` ; `tests/contract.rs` (réglages, `downloads.json`, instantanés, API, textes) ; écarts connus nommés dans le test (champs HLS en M2, textes vidéo en M3)
+- [x] Banc `examples/bench.rs` : 2,7× à 11× Node, CPU 25-30 %, 49 Mio (conception §10.4)
+- [ ] Reporté aux jalons qui les portent : `after_complete` / doublons / extraction (M5), `afterall` (M5)
 
 ### M2 HLS · M3 Vidéos · M4 Coque · M5 Données et mise à jour · M6 Installeur · M7 Livraison
 
@@ -61,4 +61,5 @@ Détail par jalon dans la conception §8. Les cases seront dépliées ici au dé
 - 2026-11-04 : conception validée ; autorisation donnée de tout faire sans s'arrêter (installeur d'essai compris). M0 étapes 1 et 2 faites (`be9ffc1`).
 - 2026-11-04 : S1 : le compositeur GPU de WebView2 156 (portable à deux GPU) laisse des couches `backdrop-filter` à moitié peintes après un changement de style en direct ; contournements côté interface sans effet, `--disable-gpu-compositing` règle tout (RAM au repos 122 Mio au lieu de 223, CPU au repos 5,3 % au lieu de 0,8 %). À refaire avec le vrai noyau en M7.
 - 2026-11-04 : un `cargo build --release` est resté bloqué 47 min (rustc quasi inactif) : tuer l'arbre de processus et relancer suffit (2 min).
+- 2026-11-04 : M1 : le vrai noyau fait aussi bien que le spike S2 (1 974 Mo/s à 8 connexions, 1 813 à 16). Une course trouvée par `queue_respects_max_concurrent` : deux téléchargements du même nom choisissaient le même `.part` ; le nom est maintenant pris et réservé sous un verrou (`Ctx::naming`). Le JS avait la même fenêtre mais s'en sortait parce qu'il est mono-fil.
 - 2026-11-04 : `rust-toolchain.toml` épingle `1.99.1` (rustup télécharge la chaîne au premier appel). `.cargo/config.toml` : `+crt-static`. Icônes lues depuis `build/` pour l'instant (déplacées en M7).
