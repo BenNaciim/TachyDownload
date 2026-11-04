@@ -2,7 +2,7 @@
 // Local file server for the throughput bench: a body of SIZE_MB made of one repeated block, `Range` supported.
 // It runs in its own process so its CPU is not counted against the client being measured.
 //   node tools/bench/server.js     prints "PORT <n>" once it listens, then serves until killed
-//   GET /__stats                   {"connections": <TCP connections accepted>, "requests": <requests served>}
+//   GET /__stats                   {"connections": <TCP connections that carried a download>, "requests": <downloads served>}
 // Used by tools/bench/bench-js.js (current engine) and by the Rust bench against the same server.
 const http = require('node:http');
 
@@ -10,8 +10,10 @@ const SIZE_MB = Number(process.env.SIZE_MB || 1024);
 const SIZE = SIZE_MB * 1024 * 1024;
 const chunk = Buffer.alloc(4 << 20, 0x5a);
 
+// A connection counts once, at its first download request: /__stats calls do not add to it.
 let connections = 0;
 let requests = 0;
+const seen = new WeakSet();
 
 const server = http.createServer(async (req, res) => {
   if (req.url === '/__stats') {
@@ -19,6 +21,10 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ connections, requests }));
   }
   requests += 1;
+  if (!seen.has(req.socket)) {
+    seen.add(req.socket);
+    connections += 1;
+  }
   let wake;
   res.once('close', () => wake?.());
   let start = 0;
@@ -43,7 +49,6 @@ const server = http.createServer(async (req, res) => {
   }
   return res.destroyed ? undefined : res.end();
 });
-server.on('connection', () => (connections += 1));
 
 server.listen(Number(process.env.PORT || 0), '127.0.0.1', () => {
   console.log('PORT ' + server.address().port);

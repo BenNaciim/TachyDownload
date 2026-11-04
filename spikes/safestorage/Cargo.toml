@@ -1,0 +1,12 @@
+[package]
+name = "spike-safestorage-read"
+description = "THROWAWAY (proof S3): open what Electron's safeStorage wrote (v10 = AES-256-GCM under a DPAPI-wrapped key) from Rust."
+version = "0.0.0"
+edition.workspace = true
+publish = false
+
+[dependencies]
+aes-gcm = "0.10"
+base64 = "0.22"
+serde_json = "1"
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_System_Memory"] }

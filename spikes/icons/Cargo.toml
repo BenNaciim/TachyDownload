@@ -1,0 +1,17 @@
+[package]
+name = "spike-icons"
+description = "THROWAWAY (proof S5, first half): the Explorer icon of a file type as a PNG data URL, through SHGetFileInfoW."
+version = "0.0.0"
+edition.workspace = true
+publish = false
+
+[dependencies]
+base64 = "0.22"
+png = "0.17"
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Storage_FileSystem",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }

@@ -404,7 +404,36 @@ Chaque ligne de « Fonctions » du README, plus les menus, les entrées de la zo
 
 ### 10.4 Résultats des preuves
 
-*À remplir en M0.*
+Mesures du 2026-11-04 sur la machine de développement (Windows 11, 10.0.26300), un seul utilisateur, antivirus actif. Les scripts sont dans `tools/bench/` et `spikes/` (sondes jetables, supprimées en M7).
+
+**S0 Référence 1.2.0 (Electron 45).**
+
+| Mesure | Résultat |
+|---|---|
+| Installeur `Tachy-Download-Setup-1.2.0.exe` | 107,7 Mio (dossier déballé : 305,6 Mio) |
+| RAM au repos (mémoire privée des 4 processus, 60 s après le lancement, 3 lancements) | 240,5 · 205,4 · 201,8 → **médiane 205,4 Mio** |
+| Démarrage à froid jusqu'à `dm.state()` résolu (`dm.list()` suit aussitôt) | 12 326 · 623 · 605 ms → **médiane 623 ms** ; le premier lancement après la construction paie l'analyse antivirus des 305 Mio |
+| Moteur Node, 1 Gio en boucle locale, débit moyen (6 passes) | 1 connexion ≈ 380 Mo/s · 8 ≈ 250 · 16 ≈ 170 (très variable : 109 à 282 à 16 connexions) |
+| Moteur Node, CPU (utilisateur + noyau) par Gio | 3,5 s · 4,2 s · 4,7 s ; le noyau pèse 55 à 60 % ; RSS du processus du banc 155 à 164 Mio |
+| `curl` sur le même serveur (plafond d'un flux) | 640 à 940 Mo/s |
+
+**S2 HTTP : GO, largement.** `reqwest` 0.13 (`default-features = false`, HTTP/1.1, sans proxy système, redirections laissées au moteur), segments `Range` en parallèle, un descripteur par segment, tampon de 1 Mio, `seek_write` hors du fil asynchrone, fichier `.part` préalloué. Même séance, mêmes serveur et disque, 3 passes :
+
+| Connexions | Débit moyen Rust | Débit moyen Node | CPU par Gio Rust | CPU par Gio Node | Pic mémoire Rust |
+|---|---|---|---|---|---|
+| 1 | 787 Mo/s | 417 Mo/s | 1,28 s | 3,47 s | 10 Mio |
+| 8 | 1 979 Mo/s | 306 Mo/s | 1,55 s | 4,07 s | 28 Mio |
+| 16 | 1 946 Mo/s | 181 Mo/s | 2,12 s | 4,64 s | 46 Mio |
+
+Le serveur a vu exactement N connexions TCP pour N plages (plus une pour le `HEAD`) : le HTTP/1.1 force bien une connexion par plage (à revérifier en HTTPS avec ALPN en M1). Le contenu écrit est contrôlé (taille et 2 000 octets répartis). Variantes à 8 connexions : tampon de 256 Kio, 1 Mio et 4 Mio équivalents (mémoire 20, 27, 56 Mio) → **1 Mio retenu** ; sans préallocation : équivalent ; **fichier clairsemé** (`FSCTL_SET_SPARSE`) : 0,27 s au lieu de 0,5 s (le noyau ne remplit plus de zéros les trous entre segments) mais autant de CPU et un fichier qui reste « clairsemé » : **non retenu**, sans objet sur un vrai réseau. L'écart avec Node vient surtout des fils d'exécution : Node traite tout dans un fil JavaScript (≈ 100 % d'un cœur), Rust répartit réseau et disque sur plusieurs cœurs.
+
+**Objectifs chiffrés fixés (barrière de §1).** Sur le banc de 1 Gio en boucle locale, médiane de 3 passes alternées avec le moteur Node dans la même séance : débit à 8 et 16 connexions ≥ 2 × celui de Node ; CPU par Gio ≤ 60 % de celui de Node ; pic mémoire du moteur à 16 connexions ≤ 100 Mio. Installeur publié ≤ 25 Mio. RAM au repos et démarrage à froid de l'application Tauri en build release : à comparer à 205,4 Mio et 623 ms une fois mesurés (objectif : pas pire).
+
+**S3 Identifiants : GO.** Un script Electron 45 sans fenêtre, avec un dossier de données temporaire, produit trois secrets synthétiques (ASCII ; accents, CJK et émoji ; 4 096 octets) avec `safeStorage.encryptString(…).toString('base64')`, comme `src/main.js`. La sonde Rust lit `Local State` (`os_crypt.encrypted_key` = `DPAPI` + blob), le déchiffre avec `CryptUnprotectData` (32 octets), puis ouvre chaque secret (`v10` + nonce de 12 octets + AES-256-GCM) : les trois sont identiques à l'original. Aller-retour `CryptProtectData` / `CryptUnprotectData` direct également bon. La migration (§6.2) est donc faisable telle que décrite.
+
+**S5 Icônes (première moitié) : GO.** `SHGetFileInfoW` (`SHGFI_USEFILEATTRIBUTES` pour une extension, sans fichier) puis `GetIconInfo` et `GetDIBits` donnent un PNG RGBA de 32 × 32 px (comme `getFileIcon({size: 'large'})` d'Electron) de 1 à 2,6 Kio : `.zip` (WinRAR), `.pdf`, un type inconnu (page blanche), et le vrai fichier `notepad.exe` (son icône propre, transparence correcte). Le repli par le masque est en place pour les vieilles icônes sans canal alpha. Le clic sur une notification reste à voir (S5, seconde moitié).
+
+**S1 Verre, S4 Installeur, S5 notification :** en cours.
 
 ### 10.5 Questions ouvertes
 

@@ -32,9 +32,10 @@ npm run dist                             # installeur Electron 1.x (référence 
 - [x] Pont `ui/renderer/dm-bridge.js` + `test/bridge.test.js` (9 tests)
 - [x] Workspace Cargo (CRT statique, outils épinglés) qui compile
 - [x] Fenêtre Tauri qui affiche l'interface avec un faux noyau (capture CDP : liste, graphique, événements `dm:update`)
-- [ ] S0 référence 1.2.0 : taille de l'installeur, RAM au repos, démarrage à froid, banc
-- [ ] S1 verre (acrylique) · S2 HTTP/1.1 Range sur le banc · S3 `safeStorage` `v10` · S4 installeur (installation, mise à jour, désinstallation) · S5 icônes et notifications
-- [ ] Résultats consignés en §10.4 de la conception ; document de parité créé
+- [x] S0 référence 1.2.0 : installeur 107,7 Mio, RAM au repos 205,4 Mio, démarrage 623 ms, banc Node (conception §10.4)
+- [x] S2 HTTP/1.1 Range : GO (8 connexions : 1 979 Mo/s contre 306 pour Node, 2,6× moins de CPU) · S3 `safeStorage` `v10` : GO · S5 icônes : GO
+- [ ] S1 verre (acrylique) · S4 installeur (installation, mise à jour, désinstallation) · S5 clic sur notification
+- [x] Document de parité créé (`../specs/2026-11-04-rust-tauri-rewrite-parity.md`) ; résultats déjà consignés en §10.4 pour S0, S2, S3, S5 (icônes)
 
 ### M1 Noyau (`crates/tachy-core`)
 
