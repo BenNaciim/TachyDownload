@@ -48,16 +48,38 @@ fn lookup(t: &Target) -> (String, bool, String) {
     (stand_in, false, format!("ext:{ext}"))
 }
 
+/// Windows sometimes answers a first lookup with success and no icon (seen on the type of `.bin` right after the
+/// process starts): ask again a few times, a moment apart, before giving up.
+fn retry<T>(
+    tries: usize,
+    pause: std::time::Duration,
+    mut f: impl FnMut() -> Option<T>,
+) -> Option<T> {
+    for i in 0..tries {
+        if let Some(v) = f() {
+            return Some(v);
+        }
+        if i + 1 < tries {
+            std::thread::sleep(pause);
+        }
+    }
+    None
+}
+
 impl IconCache {
     pub async fn file_icon(&self, t: Target<'_>) -> Option<String> {
         let (path, real, key) = lookup(&t);
         if let Some(hit) = self.0.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
             return hit.clone();
         }
-        let icon = tokio::task::spawn_blocking(move || shell::icon_data_url(&path, real))
-            .await
-            .ok()
-            .flatten();
+        let icon = tokio::task::spawn_blocking(move || {
+            retry(8, std::time::Duration::from_millis(100), || {
+                shell::icon_data_url(&path, real)
+            })
+        })
+        .await
+        .ok()
+        .flatten();
         self.0
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -267,5 +289,42 @@ mod tests {
             Some(url)
         );
         assert_eq!(cache.0.lock().unwrap().len(), 1, "one entry per extension");
+    }
+
+    #[test]
+    fn a_lookup_that_answers_nothing_is_asked_again_a_few_times() {
+        let mut calls = 0;
+        let got = retry(5, std::time::Duration::ZERO, || {
+            calls += 1;
+            (calls == 3).then_some("icon")
+        });
+        assert_eq!((got, calls), (Some("icon"), 3), "stops at the first answer");
+
+        let mut calls = 0;
+        let got: Option<()> = retry(4, std::time::Duration::ZERO, || {
+            calls += 1;
+            None
+        });
+        assert_eq!((got, calls), (None, 4), "gives up after the last try");
+    }
+
+    /// The icon is asked for from pool threads that have never touched the shell: with the retries the app uses, every
+    /// one of them gets it (a single raw lookup was seen to answer "success, no icon" now and then).
+    #[cfg(windows)]
+    #[test]
+    fn a_fresh_thread_gets_the_icon_with_the_retries_the_app_uses() {
+        let misses = (0..40)
+            .filter(|_| {
+                std::thread::spawn(|| {
+                    retry(8, std::time::Duration::from_millis(100), || {
+                        shell::icon_data_url("type.bin", false)
+                    })
+                })
+                .join()
+                .unwrap()
+                .is_none()
+            })
+            .count();
+        assert_eq!(misses, 0, "no icon for {misses} of 40 fresh threads");
     }
 }

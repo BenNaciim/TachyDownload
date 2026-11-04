@@ -37,7 +37,7 @@
       "../build/icon.png"
     ],
     "resources": {
-      "../extension": "extension"
+      "../extension": "resources/extension"
     },
     "windows": {
       "webviewInstallMode": {
@@ -49,7 +49,8 @@
           "French",
           "English"
         ],
-        "installerHooks": "windows/hooks.nsi"
+        "installerHooks": "windows/hooks.nsi",
+        "displayLanguageSelector": false
       }
     }
   }
