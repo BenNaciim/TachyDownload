@@ -19,7 +19,8 @@
         "minHeight": 460,
         "center": true,
         "transparent": true,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-gpu-compositing"
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-gpu-compositing",
+        "create": false
       }
     ],
     "security": {
@@ -28,14 +29,26 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "icon": ["../build/icon.ico", "../build/icon.png"],
-    "resources": { "../extension": "extension" },
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "../build/icon.ico",
+      "../build/icon.png"
+    ],
+    "resources": {
+      "../extension": "extension"
+    },
     "windows": {
-      "webviewInstallMode": { "type": "downloadBootstrapper" },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
       "nsis": {
         "installMode": "currentUser",
-        "languages": ["French", "English"],
+        "languages": [
+          "French",
+          "English"
+        ],
         "installerHooks": "windows/hooks.nsi"
       }
     }

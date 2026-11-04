@@ -178,6 +178,11 @@ impl Manager {
         self.inner.ctx.settings()
     }
 
+    /// The HTTP client the downloads use (it follows the proxy setting).
+    pub fn net(&self) -> crate::net::Net {
+        self.inner.ctx.net()
+    }
+
     /// Tells the downloads where ffmpeg is (it appears once the video tools are installed).
     pub fn set_ffmpeg(&self, f: crate::ctx::FfmpegPath) {
         *self

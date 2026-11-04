@@ -77,7 +77,10 @@ mod tests {
     fn command_for_builds_the_system_commands_quit_is_handled_by_the_app() {
         assert_eq!(command_for("quit"), None);
         assert_eq!(command_for("none"), None);
-        assert_eq!(command_for("shutdown").unwrap().args[..3], ["/s", "/t", "60"]);
+        assert_eq!(
+            command_for("shutdown").unwrap().args[..3],
+            ["/s", "/t", "60"]
+        );
         assert_eq!(command_for("sleep").unwrap().cmd, "rundll32.exe");
     }
 }

@@ -69,7 +69,14 @@ Ordre (chaque module : tests JS portés d'abord, puis code) :
 - [x] Tests : `tests/ytdlp.rs` (19, avec un faux yt-dlp en Node), `tests/replay.rs` (5), `tests/tools.rs` (8), unitaires `video` (31) ; exemption des textes vidéo retirée de `contract.rs`
 - [x] Vraie vidéo de bout en bout (`tests/ytdlp_real.rs`, `--ignored`) : sondage et téléchargement 360p d'une vidéo YouTube publique avec le vrai yt-dlp 2026.10.26, deno et ffmpeg
 
-### M4 Coque · M5 Données et mise à jour · M6 Installeur · M7 Livraison
+### M4 Coque Tauri (`src-tauri/src/`)
+
+- [x] Cœur : `progress` (progression de la barre des tâches), `afterall` (inactivité, commandes veille/arrêt), `menu` (barre de menus décrite en données, raccourcis uniques, cases cochées), `Manager::net()`
+- [x] Coque : `data` (dossier `%APPDATA%\Tachy Download`, `--data-dir`, jeton, migration de « Download Manager »), `commands` (tous les `dm_*` et `confirm_*`, mêmes messages français), `confirm` (fenêtre « Télécharger ce fichier ? » par demande), `menu`, `tray` (infobulle, barre des tâches), `icons` (SHGetFileInfo → PNG), `notify` (toast WinRT), `events` (pont des événements, notifications, action de fin de file), `autostart`, instance unique, `--setup-tools`, arrêt propre (sauvegarde puis sortie), minuteurs yt-dlp 20 s/6 h et application 45 s/12 h
+- [x] `test/ui.test.js` et `test/shell.test.js` pilotent le binaire Tauri (CDP + `test/win.ps1` pour le menu natif) ; l'interface actuelle fonctionne telle quelle avec le vrai noyau
+- [ ] À vérifier à la main (M5) : clic réel sur un toast, infobulle et progression de la barre des tâches à l'œil, connexion/identifiants de site (M5)
+
+### M5 Données et mise à jour · M6 Installeur · M7 Livraison
 
 Détail par jalon dans la conception §8. Les cases seront dépliées ici au début de chaque jalon.
 
@@ -81,3 +88,4 @@ Détail par jalon dans la conception §8. Les cases seront dépliées ici au dé
 - 2026-11-04 : un `cargo build --release` est resté bloqué 47 min (rustc quasi inactif) : tuer l'arbre de processus et relancer suffit (2 min).
 - 2026-11-04 : M1 : le vrai noyau fait aussi bien que le spike S2 (1 974 Mo/s à 8 connexions, 1 813 à 16). Une course trouvée par `queue_respects_max_concurrent` : deux téléchargements du même nom choisissaient le même `.part` ; le nom est maintenant pris et réservé sous un verrou (`Ctx::naming`). Le JS avait la même fenêtre mais s'en sortait parce qu'il est mono-fil.
 - 2026-11-04 : `rust-toolchain.toml` épingle `1.99.1` (rustup télécharge la chaîne au premier appel). `.cargo/config.toml` : `+crt-static`. Icônes lues depuis `build/` pour l'instant (déplacées en M7).
+- 2026-11-04 : M4 : une instance de test tuée sans son arbre de processus laisse des `msedgewebview2.exe` qui gardent le dossier de données de WebView2 ; l'instance suivante (autre port de débogage) ne répond plus. `test/app.js` met donc un délai aux requêtes CDP, et les tests tuent l'arbre (`taskkill /T /F`). Sous Tauri, `window.close()` n'existe pas côté page : la fermeture d'une fenêtre se teste par WM_CLOSE (`win.ps1`).

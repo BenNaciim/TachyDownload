@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "lint": "eslint .",
-    "test": "node --test \"test/*.test.js\"",
+    "test": "node --test --test-concurrency=1 \"test/*.test.js\"",
     "icon": "node tools/make-icon.js",
     "dist": "electron-builder --win nsis --x64 --publish never",
     "release": "node tools/release.js"

@@ -93,7 +93,11 @@ fn radio(label: &'static str, action: Action, checked: bool) -> Item {
 
 pub fn menu_template(speed_limit_kbps: u64, after_all: &str, dev_tools: bool) -> Vec<Menu> {
     let mut view = vec![
-        act("Rechercher", Some("CmdOrCtrl+F"), Action::Ui("search", None)),
+        act(
+            "Rechercher",
+            Some("CmdOrCtrl+F"),
+            Action::Ui("search", None),
+        ),
         Item::Separator,
         Item::Submenu {
             label: "Thème",
@@ -139,14 +143,22 @@ pub fn menu_template(speed_limit_kbps: u64, after_all: &str, dev_tools: bool) ->
         Menu {
             label: "Fichier",
             items: vec![
-                act("Ajouter un lien…", Some("CmdOrCtrl+N"), Action::Ui("add", None)),
+                act(
+                    "Ajouter un lien…",
+                    Some("CmdOrCtrl+N"),
+                    Action::Ui("add", None),
+                ),
                 act(
                     "Ouvrir le dossier de téléchargement",
                     Some("CmdOrCtrl+Shift+O"),
                     Action::OpenFolder,
                 ),
                 Item::Separator,
-                act("Paramètres", Some("CmdOrCtrl+,"), Action::Ui("settings", None)),
+                act(
+                    "Paramètres",
+                    Some("CmdOrCtrl+,"),
+                    Action::Ui("settings", None),
+                ),
                 Item::Separator,
                 act("Quitter", Some("CmdOrCtrl+Q"), Action::Quit),
             ],
@@ -154,8 +166,16 @@ pub fn menu_template(speed_limit_kbps: u64, after_all: &str, dev_tools: bool) ->
         Menu {
             label: "Téléchargements",
             items: vec![
-                act("Tout mettre en pause", Some("CmdOrCtrl+Shift+P"), Action::PauseAll),
-                act("Tout reprendre", Some("CmdOrCtrl+Shift+R"), Action::ResumeAll),
+                act(
+                    "Tout mettre en pause",
+                    Some("CmdOrCtrl+Shift+P"),
+                    Action::PauseAll,
+                ),
+                act(
+                    "Tout reprendre",
+                    Some("CmdOrCtrl+Shift+R"),
+                    Action::ResumeAll,
+                ),
                 act(
                     "Retirer les téléchargements terminés de la liste",
                     None,
@@ -170,7 +190,9 @@ pub fn menu_template(speed_limit_kbps: u64, after_all: &str, dev_tools: bool) ->
                     label: "Quand tout est terminé",
                     items: AFTER
                         .iter()
-                        .map(|(value, label)| radio(label, Action::SetAfterAll(value), after_all == *value))
+                        .map(|(value, label)| {
+                            radio(label, Action::SetAfterAll(value), after_all == *value)
+                        })
                         .collect(),
                 },
             ],
@@ -250,7 +272,10 @@ mod tests {
             Action::ClearFinished
         );
         assert_eq!(chosen("512 Ko/s"), Action::SetLimit(512));
-        assert_eq!(chosen("Éteindre l’ordinateur"), Action::SetAfterAll("shutdown"));
+        assert_eq!(
+            chosen("Éteindre l’ordinateur"),
+            Action::SetAfterAll("shutdown")
+        );
 
         let checked = |l: &str| match by_label(&items, l) {
             Item::Action { checked, .. } => *checked,
