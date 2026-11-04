@@ -6,7 +6,10 @@ pub fn run() {
     // S4 stand-in: the installer runs `--setup-tools` after copying the files. The real core fetches yt-dlp and
     // ffmpeg here (M3); the throwaway version only leaves a marker so the installer proof can check it ran.
     if std::env::args().any(|a| a == "--setup-tools") {
-        let _ = std::fs::write(std::env::temp_dir().join("tachy-s4-setup-tools.marker"), "ran");
+        let _ = std::fs::write(
+            std::env::temp_dir().join("tachy-s4-setup-tools.marker"),
+            "ran",
+        );
         return;
     }
     tauri::Builder::default()

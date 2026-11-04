@@ -8,7 +8,10 @@ use tauri::{AppHandle, Emitter};
 const SIZE: u64 = 1_496_157_116;
 
 fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 fn stalled(active: u64) -> Value {
@@ -67,7 +70,11 @@ fn idle() -> bool {
 
 #[tauri::command]
 pub fn dm_list() -> Vec<Value> {
-    if idle() { Vec::new() } else { vec![stalled(1), plain(), done()] }
+    if idle() {
+        Vec::new()
+    } else {
+        vec![stalled(1), plain(), done()]
+    }
 }
 
 #[tauri::command]

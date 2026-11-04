@@ -9,10 +9,13 @@ use std::path::Path;
 use base64::Engine;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::Graphics::Gdi::{
-    BI_RGB, BITMAP, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS, DeleteObject, GetDC, GetDIBits, GetObjectW, HGDIOBJ, ReleaseDC,
+    BI_RGB, BITMAP, BITMAPINFO, BITMAPINFOHEADER, DIB_RGB_COLORS, DeleteObject, GetDC, GetDIBits,
+    GetObjectW, HGDIOBJ, ReleaseDC,
 };
 use windows::Win32::Storage::FileSystem::{FILE_ATTRIBUTE_NORMAL, FILE_FLAGS_AND_ATTRIBUTES};
-use windows::Win32::UI::Shell::{SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON, SHGFI_USEFILEATTRIBUTES, SHGetFileInfoW};
+use windows::Win32::UI::Shell::{
+    SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON, SHGFI_USEFILEATTRIBUTES, SHGetFileInfoW,
+};
 use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo, ICONINFO};
 use windows::core::HSTRING;
 
@@ -37,7 +40,15 @@ fn dib(bitmap: windows::Win32::Graphics::Gdi::HBITMAP, width: i32, height: i32) 
     let mut buf = vec![0u8; (width * height * 4) as usize];
     unsafe {
         let dc = GetDC(None);
-        GetDIBits(dc, bitmap, 0, height as u32, Some(buf.as_mut_ptr().cast()), &mut bmi, DIB_RGB_COLORS);
+        GetDIBits(
+            dc,
+            bitmap,
+            0,
+            height as u32,
+            Some(buf.as_mut_ptr().cast()),
+            &mut bmi,
+            DIB_RGB_COLORS,
+        );
         ReleaseDC(Some(HWND::default()), dc);
     }
     buf
@@ -53,7 +64,15 @@ fn shell_icon(path: &str, stand_in: bool) -> Option<Rgba> {
     } else {
         FILE_FLAGS_AND_ATTRIBUTES(0)
     };
-    let ok = unsafe { SHGetFileInfoW(&HSTRING::from(path), attrs, Some(&mut info), std::mem::size_of::<SHFILEINFOW>() as u32, flags) };
+    let ok = unsafe {
+        SHGetFileInfoW(
+            &HSTRING::from(path),
+            attrs,
+            Some(&mut info),
+            std::mem::size_of::<SHFILEINFOW>() as u32,
+            flags,
+        )
+    };
     if ok == 0 || info.hIcon.is_invalid() {
         return None;
     }
@@ -61,7 +80,13 @@ fn shell_icon(path: &str, stand_in: bool) -> Option<Rgba> {
     let got = unsafe { GetIconInfo(info.hIcon, &mut ii) };
     let result = got.ok().map(|_| {
         let mut bm = BITMAP::default();
-        unsafe { GetObjectW(HGDIOBJ(ii.hbmColor.0), std::mem::size_of::<BITMAP>() as i32, Some((&mut bm as *mut BITMAP).cast())) };
+        unsafe {
+            GetObjectW(
+                HGDIOBJ(ii.hbmColor.0),
+                std::mem::size_of::<BITMAP>() as i32,
+                Some((&mut bm as *mut BITMAP).cast()),
+            )
+        };
         let (w, h) = (bm.bmWidth, bm.bmHeight);
         let mut px = dib(ii.hbmColor, w, h);
         // Old-style icons have no alpha channel: take transparency from the mask instead.
@@ -74,7 +99,11 @@ fn shell_icon(path: &str, stand_in: bool) -> Option<Rgba> {
         for p in px.chunks_exact_mut(4) {
             p.swap(0, 2); // BGRA -> RGBA
         }
-        Rgba { width: w as u32, height: h as u32, pixels: px }
+        Rgba {
+            width: w as u32,
+            height: h as u32,
+            pixels: px,
+        }
     });
     unsafe {
         if !ii.hbmColor.is_invalid() {
@@ -93,24 +122,42 @@ fn png(img: &Rgba) -> Vec<u8> {
     let mut enc = png::Encoder::new(&mut out, img.width, img.height);
     enc.set_color(png::ColorType::Rgba);
     enc.set_depth(png::BitDepth::Eight);
-    enc.write_header().unwrap().write_image_data(&img.pixels).unwrap();
+    enc.write_header()
+        .unwrap()
+        .write_image_data(&img.pixels)
+        .unwrap();
     out
 }
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let out_dir = args.next().expect("usage: spike-icons <out dir> <ext|path>...");
+    let out_dir = args
+        .next()
+        .expect("usage: spike-icons <out dir> <ext|path>...");
     std::fs::create_dir_all(&out_dir).unwrap();
     for what in args {
         let real = Path::new(&what).exists();
-        let target = if real { what.clone() } else { format!("type.{what}") };
+        let target = if real {
+            what.clone()
+        } else {
+            format!("type.{what}")
+        };
         match shell_icon(&target, !real) {
             Some(img) => {
                 let bytes = png(&img);
                 let name = what.replace(['\\', '/', ':'], "_");
                 std::fs::write(Path::new(&out_dir).join(format!("{name}.png")), &bytes).unwrap();
-                let url = format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&bytes));
-                println!("{what}: {}x{} px, {} bytes PNG, data URL {} chars", img.width, img.height, bytes.len(), url.len());
+                let url = format!(
+                    "data:image/png;base64,{}",
+                    base64::engine::general_purpose::STANDARD.encode(&bytes)
+                );
+                println!(
+                    "{what}: {}x{} px, {} bytes PNG, data URL {} chars",
+                    img.width,
+                    img.height,
+                    bytes.len(),
+                    url.len()
+                );
             }
             None => println!("{what}: no icon"),
         }

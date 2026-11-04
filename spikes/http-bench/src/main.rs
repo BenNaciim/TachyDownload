@@ -30,13 +30,30 @@ struct Opts {
 }
 
 fn parse() -> Opts {
-    let mut o = Opts { url: String::new(), conns: 8, block: 1024 * 1024, sparse: false, prealloc: true };
+    let mut o = Opts {
+        url: String::new(),
+        conns: 8,
+        block: 1024 * 1024,
+        sparse: false,
+        prealloc: true,
+    };
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--url" => o.url = args.next().expect("--url needs a value"),
-            "--conns" => o.conns = args.next().and_then(|v| v.parse().ok()).expect("--conns needs a number"),
-            "--block-kib" => o.block = args.next().and_then(|v| v.parse::<usize>().ok()).expect("--block-kib needs a number") * 1024,
+            "--conns" => {
+                o.conns = args
+                    .next()
+                    .and_then(|v| v.parse().ok())
+                    .expect("--conns needs a number")
+            }
+            "--block-kib" => {
+                o.block = args
+                    .next()
+                    .and_then(|v| v.parse::<usize>().ok())
+                    .expect("--block-kib needs a number")
+                    * 1024
+            }
             "--sparse" => o.sparse = true,
             "--no-prealloc" => o.prealloc = false,
             other => panic!("unknown argument {other}"),
@@ -52,22 +69,42 @@ fn filetime_secs(t: FILETIME) -> f64 {
 
 /// (user seconds, kernel seconds) of this process so far.
 fn cpu_times() -> (f64, f64) {
-    let (mut c, mut e, mut k, mut u) = (FILETIME::default(), FILETIME::default(), FILETIME::default(), FILETIME::default());
-    unsafe { GetProcessTimes(GetCurrentProcess(), &mut c, &mut e, &mut k, &mut u).expect("GetProcessTimes") };
+    let (mut c, mut e, mut k, mut u) = (
+        FILETIME::default(),
+        FILETIME::default(),
+        FILETIME::default(),
+        FILETIME::default(),
+    );
+    unsafe {
+        GetProcessTimes(GetCurrentProcess(), &mut c, &mut e, &mut k, &mut u)
+            .expect("GetProcessTimes")
+    };
     (filetime_secs(u), filetime_secs(k))
 }
 
 fn peak_working_set_mib() -> f64 {
     let mut m = PROCESS_MEMORY_COUNTERS::default();
     m.cb = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
-    unsafe { GetProcessMemoryInfo(GetCurrentProcess(), &mut m, m.cb).expect("GetProcessMemoryInfo") };
+    unsafe {
+        GetProcessMemoryInfo(GetCurrentProcess(), &mut m, m.cb).expect("GetProcessMemoryInfo")
+    };
     m.PeakWorkingSetSize as f64 / 1048576.0
 }
 
 fn mark_sparse(file: &std::fs::File) {
     let mut returned = 0u32;
     unsafe {
-        DeviceIoControl(HANDLE(file.as_raw_handle()), FSCTL_SET_SPARSE, None, 0, None, 0, Some(&mut returned), None).expect("FSCTL_SET_SPARSE");
+        DeviceIoControl(
+            HANDLE(file.as_raw_handle()),
+            FSCTL_SET_SPARSE,
+            None,
+            0,
+            None,
+            0,
+            Some(&mut returned),
+            None,
+        )
+        .expect("FSCTL_SET_SPARSE");
     }
 }
 
@@ -85,15 +122,36 @@ async fn flush(file: &Arc<std::fs::File>, buf: &mut Vec<u8>, pos: &mut u64, bloc
     let len = data.len() as u64;
     let f = Arc::clone(file);
     let at = *pos;
-    tokio::task::spawn_blocking(move || write_all_at(&f, &data, at)).await.expect("join").expect("disk write");
+    tokio::task::spawn_blocking(move || write_all_at(&f, &data, at))
+        .await
+        .expect("join")
+        .expect("disk write");
     *pos += len;
 }
 
-async fn segment(client: reqwest::Client, url: String, start: u64, end: u64, part: PathBuf, block: usize, got: Arc<AtomicU64>) {
-    let resp = client.get(&url).header("Range", format!("bytes={start}-{end}")).send().await.expect("range request");
+async fn segment(
+    client: reqwest::Client,
+    url: String,
+    start: u64,
+    end: u64,
+    part: PathBuf,
+    block: usize,
+    got: Arc<AtomicU64>,
+) {
+    let resp = client
+        .get(&url)
+        .header("Range", format!("bytes={start}-{end}"))
+        .send()
+        .await
+        .expect("range request");
     assert_eq!(resp.status().as_u16(), 206, "the server must answer 206");
     // One handle per segment: independent cursors, no sharing.
-    let file = Arc::new(OpenOptions::new().write(true).open(&part).expect("open .part"));
+    let file = Arc::new(
+        OpenOptions::new()
+            .write(true)
+            .open(&part)
+            .expect("open .part"),
+    );
     let mut stream = resp.bytes_stream();
     let mut buf = Vec::with_capacity(block);
     let mut pos = start;
@@ -112,8 +170,21 @@ async fn segment(client: reqwest::Client, url: String, start: u64, end: u64, par
 }
 
 async fn stats(client: &reqwest::Client, origin: &str) -> (u64, u64) {
-    let v: serde_json::Value = serde_json::from_str(&client.get(format!("{origin}/__stats")).send().await.unwrap().text().await.unwrap()).unwrap();
-    (v["connections"].as_u64().unwrap(), v["requests"].as_u64().unwrap())
+    let v: serde_json::Value = serde_json::from_str(
+        &client
+            .get(format!("{origin}/__stats"))
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    (
+        v["connections"].as_u64().unwrap(),
+        v["requests"].as_u64().unwrap(),
+    )
 }
 
 fn check(path: &Path, size: u64) {
@@ -140,11 +211,19 @@ async fn main() {
         .read_timeout(Duration::from_secs(60))
         .build()
         .expect("client");
-    let stats_client = reqwest::Client::builder().http1_only().no_proxy().build().unwrap();
+    let stats_client = reqwest::Client::builder()
+        .http1_only()
+        .no_proxy()
+        .build()
+        .unwrap();
     let (conns0, reqs0) = stats(&stats_client, &origin).await;
 
     let head = client.head(&o.url).send().await.expect("HEAD");
-    let size: u64 = head.headers()["content-length"].to_str().unwrap().parse().unwrap();
+    let size: u64 = head.headers()["content-length"]
+        .to_str()
+        .unwrap()
+        .parse()
+        .unwrap();
 
     let dir = std::env::temp_dir().join(format!("spike-http-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -168,7 +247,10 @@ async fn main() {
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_millis(100)).await;
-                samples.lock().unwrap().push((t0.elapsed().as_secs_f64(), got.load(Ordering::Relaxed)));
+                samples
+                    .lock()
+                    .unwrap()
+                    .push((t0.elapsed().as_secs_f64(), got.load(Ordering::Relaxed)));
             }
         })
     };
@@ -177,7 +259,15 @@ async fn main() {
     let mut tasks = Vec::new();
     for i in 0..o.conns {
         let (s, e) = (i * per, ((i + 1) * per).min(size) - 1);
-        tasks.push(tokio::spawn(segment(client.clone(), o.url.clone(), s, e, part.clone(), o.block, got.clone())));
+        tasks.push(tokio::spawn(segment(
+            client.clone(),
+            o.url.clone(),
+            s,
+            e,
+            part.clone(),
+            o.block,
+            got.clone(),
+        )));
     }
     for t in tasks {
         t.await.expect("segment task");
@@ -197,9 +287,20 @@ async fn main() {
     check(&part, size);
     println!(
         "conns={} block={}KiB sparse={} prealloc={} | wall={:.2}s avg={:.0}MB/s steady={:.0}MB/s | cpu user={:.2}s kernel={:.2}s total={:.2}s ({:.0}% of a core) | peakWS={:.0}MiB | server saw {} TCP connections for {} requests",
-        o.conns, o.block / 1024, o.sparse, o.prealloc, wall, size as f64 / wall / 1e6, steady,
-        cpu_u1 - cpu_u0, cpu_k1 - cpu_k0, (cpu_u1 - cpu_u0) + (cpu_k1 - cpu_k0), ((cpu_u1 - cpu_u0) + (cpu_k1 - cpu_k0)) / wall * 100.0,
-        peak_working_set_mib(), conns1 - conns0, reqs1 - reqs0,
+        o.conns,
+        o.block / 1024,
+        o.sparse,
+        o.prealloc,
+        wall,
+        size as f64 / wall / 1e6,
+        steady,
+        cpu_u1 - cpu_u0,
+        cpu_k1 - cpu_k0,
+        (cpu_u1 - cpu_u0) + (cpu_k1 - cpu_k0),
+        ((cpu_u1 - cpu_u0) + (cpu_k1 - cpu_k0)) / wall * 100.0,
+        peak_working_set_mib(),
+        conns1 - conns0,
+        reqs1 - reqs0,
     );
     std::fs::remove_dir_all(&dir).ok();
 }
