@@ -100,7 +100,7 @@ Ordre (chaque module : tests JS portés d'abord, puis code) :
 - [x] Fixtures de contrat gardées, figées, avec une note (`crates/tachy-core/tests/fixtures/README.md`)
 - [x] Tout passe : `cargo fmt --check`, `clippy -D warnings`, `cargo test --workspace` (203 tests), les 3 tests contre le vrai réseau (vraie vidéo, vrai flux HLS), `npm test` (40), `npm run lint`
 - [x] Liste de parité cochée : 45 lignes couvertes, 14 restent à voir par une personne (geste humain ou seconde release)
-- [ ] Fusion de `rust-tauri` dans `main` (sans étiquette ni release : la publication reste au propriétaire)
+- [x] Fusion de `rust-tauri` dans `main` (2026-11-05, 6b7760b) (sans étiquette ni release : la publication reste au propriétaire)
 
 ## Journal
 
