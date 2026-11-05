@@ -1,0 +1,45 @@
+[package]
+name = "tachy-download"
+description = "Tachy Download: multi-connection download manager with a browser extension."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+default-run = "tachy-download"
+
+[lib]
+name = "tachy_download_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tachy-core = { path = "../crates/tachy-core" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
+uuid = { version = "1.29.0", features = ["v4"] }
+url = "2.5.8"
+base64 = "0.23"
+aes-gcm = "0.10"
+
+[target.'cfg(windows)'.dependencies]
+tauri-winrt-notification = "0.8"
+png = "0.18"
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
+    "Win32_Security_Cryptography",
+    "Win32_Storage_FileSystem",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }

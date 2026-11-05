@@ -1,0 +1,863 @@
+{
+  "dir": "C:\\Downloads",
+  "cases": [
+    {
+      "input": {},
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "connections": 99
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 32,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "connections": -3
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 1,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "connections": "abc"
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 1,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "maxConcurrent": 0
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 1,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "maxConcurrent": 50
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 10,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "videoMaxHeight": 5000
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "videoMaxHeight": 240.4
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "speedLimitKBps": -5
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "speedLimitKBps": 123.6
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 124,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "proxy": "proxy.local:3128"
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "http://proxy.local:3128",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "proxy": "socks5://x:1"
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "proxy": "  "
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "speedSchedule": {
+          "enabled": true,
+          "from": "22:00",
+          "to": "06:00",
+          "limitKBps": 50
+        }
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": true,
+          "from": "22:00",
+          "to": "06:00",
+          "limitKBps": 50
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "speedSchedule": {
+          "enabled": true,
+          "from": "25:00",
+          "to": "x",
+          "limitKBps": -1
+        }
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": true,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 0
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "speedSchedule": {
+          "enabled": "yes"
+        }
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": true,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 0
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "schedule": {
+          "enabled": true,
+          "from": "09:30",
+          "to": "9:5"
+        }
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": true,
+          "from": "09:30",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "afterAll": "shutdown"
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "shutdown",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "afterAll": "format-the-disk"
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "categories": 1,
+        "autoRetry": 0,
+        "adaptive": "",
+        "duplicates": null
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": true,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "rules": ".pdf = Docs",
+        "ytCookies": "firefox",
+        "foo": "bar"
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": ".pdf = Docs",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": true,
+        "notifications": true,
+        "confirmDownloads": true,
+        "autoUpdate": true,
+        "ytCookies": "firefox",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    },
+    {
+      "input": {
+        "confirmDownloads": false,
+        "notifications": false,
+        "closeToTray": false,
+        "autoUpdate": false
+      },
+      "output": {
+        "dir": "C:\\Downloads",
+        "connections": 8,
+        "maxConcurrent": 3,
+        "speedLimitKBps": 0,
+        "videoMaxHeight": 1080,
+        "convertToMp4": true,
+        "categories": false,
+        "autoRetry": true,
+        "adaptive": true,
+        "proxy": "",
+        "speedSchedule": {
+          "enabled": false,
+          "from": "08:00",
+          "to": "18:00",
+          "limitKBps": 500
+        },
+        "rules": "",
+        "duplicates": true,
+        "autoExtract": false,
+        "autoStart": false,
+        "closeToTray": false,
+        "notifications": false,
+        "confirmDownloads": false,
+        "autoUpdate": false,
+        "ytCookies": "",
+        "afterAll": "none",
+        "schedule": {
+          "enabled": false,
+          "from": "01:00",
+          "to": "07:00"
+        }
+      }
+    }
+  ]
+}

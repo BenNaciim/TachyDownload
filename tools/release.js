@@ -2,8 +2,8 @@
 
 // Usage: npm run release -- <patch|minor|major|x.y.z> [--dry-run] [--notes "text"]
 //
-// Bumps the version (package.json, package-lock.json, extension/manifest.json), runs the tests,
-// builds the installer, commits "Release vX.Y.Z", tags it, pushes, and creates the GitHub release
+// Bumps the version (package.json, package-lock.json, extension/manifest.json, Cargo.toml, src-tauri/tauri.conf.json),
+// runs the tests, builds the installer with Tauri (NSIS) and names it Tachy-Download-Setup-<version>.exe, commits "Release vX.Y.Z", tags it, pushes, and creates the GitHub release
 // with the installer attached. Needs git, npm and the GitHub CLI (`gh`, signed in via `gh auth login`).
 
 const fs = require('node:fs');
@@ -39,6 +39,15 @@ function nextVersion(current, how) {
 
 const readJson = (f) => JSON.parse(fs.readFileSync(path.join(root, f), 'utf8'));
 const writeJson = (f, data) => fs.writeFileSync(path.join(root, f), `${JSON.stringify(data, null, 2)}\n`);
+
+/** Sets `version = "x"` in Cargo.toml, the [workspace.package] line every crate inherits. */
+function setCargoVersion(version) {
+  const file = path.join(root, 'Cargo.toml');
+  const text = fs.readFileSync(file, 'utf8');
+  const next = text.replace(/^(version\s*=\s*)"[^"]*"/m, `$1"${version}"`);
+  if (!next.includes(`version = "${version}"`)) fail('no version line found in Cargo.toml');
+  fs.writeFileSync(file, next);
+}
 
 const pkg = readJson('package.json');
 const version = nextVersion(pkg.version, bump);
@@ -81,10 +90,17 @@ if (fs.existsSync(lockFile)) {
 const manifest = readJson('extension/manifest.json');
 manifest.version = version;
 writeJson('extension/manifest.json', manifest);
+setCargoVersion(version);
+const tauriConf = readJson('src-tauri/tauri.conf.json');
+tauriConf.version = version;
+writeJson('src-tauri/tauri.conf.json', tauriConf);
 
-const undo = () => run('git', ['checkout', '--', 'package.json', 'package-lock.json', 'extension/manifest.json']);
+const VERSIONED = ['package.json', 'package-lock.json', 'extension/manifest.json', 'Cargo.toml', 'Cargo.lock', 'src-tauri/tauri.conf.json'];
+const undo = () => run('git', ['checkout', '--', ...VERSIONED]);
 try {
   step('Running the tests');
+  run('cargo', ['test', '-p', 'tachy-core', '-p', 'tachy-download']);
+  run('cargo', ['build', '-p', 'tachy-download']); // the binary the browser-driven tests launch
   run('npm', ['test']);
   step('Building the installer');
   fs.rmSync(path.join(root, 'dist'), { recursive: true, force: true });
@@ -94,14 +110,18 @@ try {
   throw err;
 }
 
+// Tauri names it "<product>_<version>_x64-setup.exe"; the app's updater looks for Tachy-Download-Setup-*.exe.
+const built = path.join(root, 'target', 'release', 'bundle', 'nsis', `Tachy Download_${version}_x64-setup.exe`);
 const installer = path.join(root, 'dist', `Tachy-Download-Setup-${version}.exe`);
-if (!fs.existsSync(installer)) {
+if (!fs.existsSync(built)) {
   undo();
-  fail(`the installer was not produced: ${installer}`);
+  fail(`the installer was not produced: ${built}`);
 }
+fs.mkdirSync(path.dirname(installer), { recursive: true });
+fs.copyFileSync(built, installer);
 
 step('Committing, tagging and pushing');
-run('git', ['add', 'package.json', 'package-lock.json', 'extension/manifest.json']);
+run('git', ['add', ...VERSIONED]);
 run('git', ['commit', '-m', `Release ${tag}`]);
 run('git', ['tag', '-a', tag, '-m', `Tachy Download ${version}`]);
 run('git', ['push', 'origin', 'main']);

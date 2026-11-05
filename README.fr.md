@@ -4,7 +4,7 @@
 
 Gestionnaire de téléchargement rapide pour Windows : segments parallèles, reprise, file d'attente, vidéos YouTube et flux HLS, extension pour Chrome, Edge et Firefox. Open source, sans publicité ni compte.
 
-Écrit de zéro avec Electron et Node.js, à partir de HTTP standard (`Range`, `Content-Range`, `If-Range`).
+Écrit de zéro en Rust (moteur) et Tauri 2 (fenêtre, menu, zone de notification), à partir de HTTP standard (`Range`, `Content-Range`, `If-Range`).
 
 ## Fonctions
 
@@ -39,11 +39,11 @@ L'installateur n'est pas signé : Windows SmartScreen affichera « Windows a pro
 
 ```bash
 npm install
-npm start
-npm test
+cargo run -p tachy-download
+cargo test -p tachy-core -p tachy-download
 ```
 
-Construire l'installateur (voir [docs/BUILD.fr.md](docs/BUILD.fr.md)) : `npm run dist` produit `dist/Tachy-Download-Setup-<version>.exe`. Pour changer l'icône, modifier `tools/make-icon.js` puis `npm run icon`.
+Les tests pilotés par navigateur (`npm test`) lancent la version de débogage : faire d'abord `cargo build -p tachy-download`. Construire l'installateur (voir [docs/BUILD.fr.md](docs/BUILD.fr.md)) : `npm run dist` le produit dans `target/release/bundle/nsis/`. Pour changer l'icône, modifier `tools/make-icon.js` puis `npm run icon`.
 
 Les téléchargements vont par défaut dans le dossier Téléchargements. Les réglages et la liste sont enregistrés dans le dossier de données de l'application.
 
@@ -64,11 +64,12 @@ L'application écoute uniquement sur `127.0.0.1` (port 6800, puis 6801… si occ
 ## Structure
 
 ```
-src/engine/   moteur (sans dépendance Electron) : download, hls, ytdlp, manager, tools, probe
-src/server.js API locale pour l'extension
-src/main.js   processus principal Electron ; preload.js pont IPC ; renderer/ interface
+crates/tachy-core/  moteur (sans dépendance à l'interface) : téléchargement, HLS, vidéo (yt-dlp), gestionnaire, outils, mise à jour, API locale
+src-tauri/          coque Tauri : fenêtre, menu, zone de notification, notifications, hooks de l'installateur (windows/hooks.nsi)
+ui/           interface (renderer/ pages et scripts, shared/ table des types de fichiers)
 extension/    extension MV3 (Chrome, Edge, Firefox)
-test/         tests node:test (serveur HTTP local avec Range)
+crates/*/tests/     tests Rust (serveur HTTP local avec Range, faux yt-dlp, contrats enregistrés)
+test/               tests node:test : la vraie application pilotée par sa fenêtre, l'extension
 ```
 
 ## Limites connues

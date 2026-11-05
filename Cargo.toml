@@ -1,0 +1,16 @@
+[workspace]
+resolver = "3"
+members = ["crates/tachy-core", "src-tauri"]
+
+[workspace.package]
+version = "2.0.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.99"
+repository = "https://github.com/BenNaciim/TachyDownload"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+opt-level = 3

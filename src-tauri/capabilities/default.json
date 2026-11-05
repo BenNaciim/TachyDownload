@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The main window and the download confirmation window: the interface calls our own commands and listens to our events, nothing else.",
+  "windows": [
+    "main",
+    "confirm-*"
+  ],
+  "permissions": [
+    "core:default"
+  ]
+}

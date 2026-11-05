@@ -1,0 +1,297 @@
+{
+  "token": "toktoktoktoktoktoktoktoktoktoktoktoktoktoktoktok",
+  "cases": [
+    {
+      "name": "ping",
+      "req": {
+        "path": "/ping",
+        "host": null
+      },
+      "status": 200,
+      "body": {
+        "ok": true,
+        "app": "tachy-download"
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json"
+      }
+    },
+    {
+      "name": "ping from an extension",
+      "req": {
+        "path": "/ping",
+        "headers": {
+          "Origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
+        },
+        "host": null
+      },
+      "status": 200,
+      "body": {
+        "ok": true,
+        "app": "tachy-download"
+      },
+      "headers": {
+        "access-control-allow-origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+        "vary": "Origin",
+        "cache-control": "no-store",
+        "content-type": "application/json"
+      }
+    },
+    {
+      "name": "ping from a web page",
+      "req": {
+        "path": "/ping",
+        "headers": {
+          "Origin": "https://evil.example"
+        },
+        "host": null
+      },
+      "status": 403,
+      "body": {
+        "error": "origin"
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json"
+      }
+    },
+    {
+      "name": "foreign host",
+      "req": {
+        "path": "/ping",
+        "host": "evil.example"
+      },
+      "status": 403,
+      "body": {
+        "error": "host"
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json"
+      }
+    },
+    {
+      "name": "localhost host",
+      "req": {
+        "path": "/ping",
+        "host": "localhost:{port}"
+      },
+      "status": 200,
+      "body": {
+        "ok": true,
+        "app": "tachy-download"
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json"
+      }
+    },
+    {
+      "name": "no token",
+      "req": {
+        "method": "POST",
+        "path": "/add",
+        "headers": {
+          "Content-Type": "application/json",
+          "Origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
+        },
+        "body": "{\"url\":\"http://x/\"}",
+        "host": null
+      },
+      "status": 401,
+      "body": {
+        "error": "token"
+      },
+      "headers": {
+        "access-control-allow-origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+        "vary": "Origin",
+        "cache-control": "no-store",
+        "content-type": "application/json"
+      }
+    },
+    {
+      "name": "wrong token",
+      "req": {
+        "method": "POST",
+        "path": "/add",
+        "headers": {
+          "Content-Type": "application/json",
+          "X-DM-Token": "nope"
+        },
+        "body": "{\"url\":\"http://x/\"}",
+        "host": null
+      },
+      "status": 401,
+      "body": {
+        "error": "token"
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json"
+      }
+    },
+    {
+      "name": "unknown route",
+      "req": {
+        "path": "/nope",
+        "headers": {
+          "X-DM-Token": "toktoktoktoktoktoktoktoktoktoktoktoktoktoktoktok"
+        },
+        "host": null
+      },
+      "status": 404,
+      "body": {
+        "error": "not found"
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json"
+      }
+    },
+    {
+      "name": "refresh requests",
+      "req": {
+        "path": "/refresh-requests",
+        "headers": {
+          "X-DM-Token": "toktoktoktoktoktoktoktoktoktoktoktoktoktoktoktok",
+          "Origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
+        },
+        "host": null
+      },
+      "status": 200,
+      "body": {
+        "requests": []
+      },
+      "headers": {
+        "access-control-allow-origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+        "vary": "Origin",
+        "cache-control": "no-store",
+        "content-type": "application/json"
+      }
+    },
+    {
+      "name": "add a file link",
+      "req": {
+        "method": "POST",
+        "path": "/add",
+        "headers": {
+          "Content-Type": "application/json",
+          "X-DM-Token": "toktoktoktoktoktoktoktoktoktoktoktoktoktoktoktok"
+        },
+        "body": "{\"url\":\"file:///etc/passwd\"}",
+        "host": null
+      },
+      "status": 400,
+      "body": {
+        "error": "Seuls les liens http et https sont pris en charge"
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json"
+      }
+    },
+    {
+      "name": "add garbage",
+      "req": {
+        "method": "POST",
+        "path": "/add",
+        "headers": {
+          "Content-Type": "application/json",
+          "X-DM-Token": "toktoktoktoktoktoktoktoktoktoktoktoktoktoktoktok"
+        },
+        "body": "{\"url\":\"not a url\"}",
+        "host": null
+      },
+      "status": 400,
+      "body": {
+        "error": "Adresse invalide"
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json"
+      }
+    },
+    {
+      "name": "add without url",
+      "req": {
+        "method": "POST",
+        "path": "/add",
+        "headers": {
+          "Content-Type": "application/json",
+          "X-DM-Token": "toktoktoktoktoktoktoktoktoktoktoktoktoktoktoktok"
+        },
+        "body": "{}",
+        "host": null
+      },
+      "status": 400,
+      "body": {
+        "error": "Adresse invalide"
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json"
+      }
+    },
+    {
+      "name": "refresh unknown id",
+      "req": {
+        "method": "POST",
+        "path": "/refresh",
+        "headers": {
+          "Content-Type": "application/json",
+          "X-DM-Token": "toktoktoktoktoktoktoktoktoktoktoktoktoktoktoktok"
+        },
+        "body": "{\"id\":\"nope\",\"url\":\"http://x/\"}",
+        "host": null
+      },
+      "status": 400,
+      "body": {
+        "error": "Téléchargement introuvable"
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json"
+      }
+    },
+    {
+      "name": "preflight",
+      "req": {
+        "method": "OPTIONS",
+        "path": "/add",
+        "headers": {
+          "Origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop"
+        },
+        "host": null
+      },
+      "status": 204,
+      "body": null,
+      "headers": {
+        "access-control-allow-origin": "chrome-extension://abcdefghijklmnopabcdefghijklmnop",
+        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-headers": "Content-Type, X-DM-Token",
+        "access-control-max-age": "600",
+        "vary": "Origin"
+      }
+    },
+    {
+      "name": "preflight from a web page",
+      "req": {
+        "method": "OPTIONS",
+        "path": "/add",
+        "headers": {
+          "Origin": "https://evil.example"
+        },
+        "host": null
+      },
+      "status": 403,
+      "body": {
+        "error": "origin"
+      },
+      "headers": {
+        "cache-control": "no-store",
+        "content-type": "application/json"
+      }
+    }
+  ]
+}

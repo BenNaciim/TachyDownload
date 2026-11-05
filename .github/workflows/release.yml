@@ -1,7 +1,7 @@
 name: Release
 
 # Run it from the repository's Actions tab ("Run workflow"): pick patch, minor or major.
-# It bumps the version, runs the tests, builds the Windows installer, commits and tags the
+# It bumps the version, runs the tests, builds the Windows installer (Tauri, NSIS), commits and tags the
 # bump, then publishes a GitHub release with the installer attached.
 on:
   workflow_dispatch:
@@ -19,6 +19,9 @@ on:
 permissions:
   contents: write
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   release:
     runs-on: windows-latest
@@ -33,6 +36,10 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - run: rustup show
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Git identity for the version commit
         run: |
