@@ -90,11 +90,17 @@ Ordre (chaque module : tests JS portés d'abord, puis code) :
 - [x] Installeur NSIS Tauri : 4,37 Mio (objectif ≤ 25 Mio), `installMode: currentUser`, extension dans `resources\extension`, sélecteur de langue retiré (langue du système, enregistrée pour le désinstalleur), hooks : `--setup-tools` en fin d'installation, case « supprimer les données » étendue à `%APPDATA%\Tachy Download`
 - [x] `tools/check-installer.ps1` : installe en silencieux dans un dossier jetable, vérifie fichiers, raccourcis, entrée de désinstallation, lance `ui.test.js` et `shell.test.js` contre le programme installé, met à jour par-dessus un programme en cours (`/S /UPDATE /R`), désinstalle, vérifie que les données restent
 - [x] `tools/release.js` (versions de `package.json`, `package-lock.json`, `extension/manifest.json`, `Cargo.toml`, `tauri.conf.json` ; tests Rust + Node ; `tauri build` ; copie en `Tachy-Download-Setup-<version>.exe`), `npm run dist`, CI `test.yml` (fmt, clippy -D warnings, tests, lint, tests pilotés) et `release.yml` (non exécutables ici), `docs/BUILD.md` et `BUILD.fr.md`
-- [ ] README (structure du dépôt) : en M7, avec la suppression du code Electron
+- [x] README (structure du dépôt) : fait en M7, avec la suppression du code Electron
 
 ### M7 Livraison
 
-Détail dans la conception §8. Les cases seront dépliées ici au début du jalon.
+- [x] Audit des 21 fichiers de tests JS du moteur contre les tests Rust : tout est porté ; seul « classement par type activé ou non » manquait, ajouté (`engine.rs`)
+- [x] Code Electron retiré : `src/`, `spikes/`, `build/installer.nsh`, `tools/after-pack.js`, `tools/make-fixtures.js`, `tools/bench/bench-js.js`, les 21 tests JS portés ; `package.json` sans Electron, electron-builder ni undici ; version 2.0.0 partout (`package.json`, extension, Cargo, Tauri)
+- [x] `bridge.test.js` : la liste des méthodes exposées est figée dans le test (elle venait de `preload.js`)
+- [x] Fixtures de contrat gardées, figées, avec une note (`crates/tachy-core/tests/fixtures/README.md`)
+- [x] Tout passe : `cargo fmt --check`, `clippy -D warnings`, `cargo test --workspace` (203 tests), les 3 tests contre le vrai réseau (vraie vidéo, vrai flux HLS), `npm test` (40), `npm run lint`
+- [x] Liste de parité cochée : 45 lignes couvertes, 14 restent à voir par une personne (geste humain ou seconde release)
+- [ ] Fusion de `rust-tauri` dans `main` (sans étiquette ni release : la publication reste au propriétaire)
 
 ## Journal
 
@@ -111,3 +117,4 @@ Détail dans la conception §8. Les cases seront dépliées ici au début du jal
 - 2026-11-04 : M6 : l'icône de type de fichier de la fenêtre de confirmation manquait par intermittence (5 essais sur 8 en release) : `SHGetFileInfo` répond parfois « succès, sans icône » juste après le démarrage. Relances (8 fois, 100 ms) ; 12 essais sur 12 ensuite.
 - 2026-11-04 : `Start-Process -Wait` attend aussi les processus lancés par l'installeur (l'appli relancée par `/R`) : ne pas l'utiliser pour l'installeur en mode mise à jour.
 - 2026-11-04 : M6 terminé. `check-installer.ps1` passe en entier sur l'installeur final (4,37 Mio) : installation, 12 tests pilotés contre le programme installé, mise à jour par-dessus un programme en cours (ancien arrêté, relancé, pas de `.old`, une seule entrée), désinstallation, données conservées. Mesure du build final (médiane de 3, `measure-app.js`) : démarrage à froid 565 ms, mémoire 217 Mio (7 à 9 processus), CPU au repos 2,1 % ; Electron : environ 990 ms, 207 Mio, 0,1 %. Non vérifiés ici : les workflows CI, la case « supprimer les données » du désinstalleur en mode graphique.
+- 2026-11-05 : M7 : suite complète verte après suppression d'Electron ; `npm run lint` lisait `target/` (JS généré par Tauri) : ignoré dans `eslint.config.js`.

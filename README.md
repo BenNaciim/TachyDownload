@@ -68,12 +68,12 @@ The app listens on `127.0.0.1` only (port 6800, then 6801… if busy). Three che
 ## Layout
 
 ```
-src/engine/   engine (no Electron dependency): download, hls, ytdlp, manager, tools, probe
-src/server.js local API for the extension
-src/main.js   Electron main process; preload.js IPC bridge
+crates/tachy-core/  engine (no UI dependency): download, hls, video (yt-dlp), manager, tools, updater, local API
+src-tauri/          Tauri shell: window, menu, tray, notifications, installer hooks (windows/hooks.nsi)
 ui/           user interface (renderer/ pages and scripts, shared/ file-type table)
 extension/    MV3 extension (Chrome, Edge, Firefox)
-test/         node:test suite (local HTTP server with Range)
+crates/*/tests/     Rust tests (local HTTP server with Range, stand-in yt-dlp, recorded contracts)
+test/               node:test suite: the real app driven through its window, the extension
 ```
 
 ## Known limits

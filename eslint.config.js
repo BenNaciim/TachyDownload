@@ -14,7 +14,7 @@ const shared = {
 };
 
 module.exports = [
-  { ignores: ['dist/**', 'node_modules/**', 'build/**', 'docs/**'] },
+  { ignores: ['dist/**', 'node_modules/**', 'build/**', 'docs/**', 'target/**', 'src-tauri/gen/**'] },
   js.configs.recommended,
   {
     files: ['**/*.js'],

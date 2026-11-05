@@ -13,11 +13,14 @@ const BRIDGE = fs.readFileSync(path.join(ROOT, 'ui', 'renderer', 'dm-bridge.js')
 const wire = (x) => JSON.parse(JSON.stringify(x));
 
 /** Method names an Electron preload hands to contextBridge.exposeInMainWorld(name, { ... }). */
-function exposed(file, name) {
-  const src = fs.readFileSync(path.join(ROOT, 'src', file), 'utf8');
-  const body = src.slice(src.indexOf(`exposeInMainWorld('${name}', {`));
-  return [...body.matchAll(/^ {2}(\w+):/gm)].map((m) => m[1]).sort();
-}
+// The surface the window scripts rely on, as the Electron preload scripts exposed it (frozen at 1.2.0).
+const DM_METHODS = [
+  'add', 'checkUpdate', 'copyDiagnostic', 'copyToken', 'fileIcon', 'installTool', 'installUpdate', 'list', 'logins',
+  'onMenu', 'onRemoved', 'onSettings', 'onTools', 'onUpdate', 'onUpdateAvail', 'onUpdateProgress', 'open', 'openPage',
+  'pause', 'pickDir', 'redownload', 'remove', 'removeLogin', 'resume', 'reveal', 'saveLogin', 'setLimit', 'setSettings',
+  'state', 'toolsStatus',
+];
+const CONFIRM_METHODS = ['answer', 'category', 'init', 'pickDir', 'probe'];
 
 /** Runs the bridge in a page whose `window.__TAURI__` is a recording stand-in for Tauri's global API. */
 function load({ dm, invoke = async () => undefined, holdListen = false } = {}) {
@@ -65,10 +68,10 @@ test('does nothing outside Tauri (no window.__TAURI__): the Electron confirmatio
   assert.equal(window.confirmApi, undefined);
 });
 
-test('exposes exactly the methods of preload.js and confirm-preload.js', () => {
+test('exposes exactly the methods the Electron preload scripts did', () => {
   const { window } = load();
-  assert.deepEqual(Object.keys(window.dm).sort(), exposed('preload.js', 'dm'));
-  assert.deepEqual(Object.keys(window.confirmApi).sort(), exposed('confirm-preload.js', 'confirmApi'));
+  assert.deepEqual(Object.keys(window.dm).sort(), DM_METHODS);
+  assert.deepEqual(Object.keys(window.confirmApi).sort(), CONFIRM_METHODS);
 });
 
 test('turns positional arguments into the named arguments of the Tauri commands', async () => {

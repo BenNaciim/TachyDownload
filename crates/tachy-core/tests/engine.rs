@@ -387,3 +387,37 @@ async fn pausing_shows_at_once_and_resuming_right_after_still_finishes_the_file(
     assert_eq!(std::fs::read(dir.join("sample.bin")).unwrap(), body);
     m.shutdown().await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn type_folders_on_the_finished_file_goes_into_its_folder_off_it_stays_put() {
+    let body = random_body(200 * 1024);
+    let srv = start_server(
+        body,
+        Opts {
+            disposition: Some("attachment; filename=\"rapport.pdf\"".into()),
+            ..Opts::default()
+        },
+    )
+    .await;
+    for (on, expected) in [(true, "Documents"), (false, "")] {
+        let dir = tmp_dir();
+        let m = make_manager(&dir, json!({ "categories": on }));
+        let id = m
+            .add(&format!("{}?c={on}", srv.url), &AddOpts::default())
+            .unwrap()
+            .state
+            .id;
+        finished(&m, &id).await;
+        let done = snap(&m, &id).state;
+        assert_eq!(done.status, Status::Completed, "{:?}", done.error);
+        let want = if expected.is_empty() {
+            dir.clone()
+        } else {
+            dir.join(expected)
+        };
+        assert_eq!(std::path::PathBuf::from(&done.dir), want);
+        assert!(want.join("rapport.pdf").exists());
+        assert!(!dir.join("rapport.pdf.part").exists());
+        m.shutdown().await;
+    }
+}

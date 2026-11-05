@@ -64,12 +64,12 @@ L'application écoute uniquement sur `127.0.0.1` (port 6800, puis 6801… si occ
 ## Structure
 
 ```
-src/engine/   moteur (sans dépendance Electron) : download, hls, ytdlp, manager, tools, probe
-src/server.js API locale pour l'extension
-src/main.js   processus principal Electron ; preload.js pont IPC
+crates/tachy-core/  moteur (sans dépendance à l'interface) : téléchargement, HLS, vidéo (yt-dlp), gestionnaire, outils, mise à jour, API locale
+src-tauri/          coque Tauri : fenêtre, menu, zone de notification, notifications, hooks de l'installateur (windows/hooks.nsi)
 ui/           interface (renderer/ pages et scripts, shared/ table des types de fichiers)
 extension/    extension MV3 (Chrome, Edge, Firefox)
-test/         tests node:test (serveur HTTP local avec Range)
+crates/*/tests/     tests Rust (serveur HTTP local avec Range, faux yt-dlp, contrats enregistrés)
+test/               tests node:test : la vraie application pilotée par sa fenêtre, l'extension
 ```
 
 ## Limites connues
