@@ -97,6 +97,15 @@ async function launch({ settings = {}, args = [] } = {}) {
         { encoding: 'utf8', timeout: 20000 },
       ).replace(/\s+/g, ' ');
     } catch {}
+    // The command line the web view's browser process was really started with (is the debugging port in it?).
+    let cmdline = '';
+    try {
+      cmdline = execFileSync(
+        'powershell',
+        ['-NoProfile', '-Command', "Get-CimInstance Win32_Process -Filter \"Name='msedgewebview2.exe'\" | Where-Object { $_.CommandLine -notmatch '--type=' } | ForEach-Object { $_.ProcessId.ToString() + ' ' + $_.CommandLine } | Out-String"],
+        { encoding: 'utf8', timeout: 20000 },
+      ).replace(/\s+/g, ' ').slice(0, 900);
+    } catch {}
     const state = app.exitCode === null ? 'still running' : `exited with ${app.exitCode}`;
     // The windows the app really has (an error box would explain why no page came up) and the web view's processes.
     let windows = '';
@@ -112,7 +121,7 @@ async function launch({ settings = {}, args = [] } = {}) {
     try {
       out = fs.readFileSync(logPath, 'utf8').slice(-1500);
     } catch {}
-    throw new Error(`the app did not come up (${state}; pages seen: ${JSON.stringify(seen)}; its output: ${JSON.stringify(out)}; processes and window titles: ${windows}; debugging port ${port} answers: ${raw}; loopback listeners: ${listening}): ${e.message}`);
+    throw new Error(`the app did not come up (${state}; pages seen: ${JSON.stringify(seen)}; its output: ${JSON.stringify(out)}; processes and window titles: ${windows}; debugging port ${port} answers: ${raw}; loopback listeners: ${listening}; web view browser process: ${cmdline}): ${e.message}`);
   }
   const { ev } = main;
   const open = [main];
