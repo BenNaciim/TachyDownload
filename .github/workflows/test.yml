@@ -44,6 +44,24 @@ jobs:
 
       - run: npm run lint
 
+      # The window needs the WebView2 runtime. Without it the app stays up behind an error box and the browser-driven
+      # tests never find a page. Report the version, and install the runtime when it is missing.
+      - name: WebView2 runtime
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $v = (Get-ItemProperty $key -ErrorAction SilentlyContinue).pv
+          if ($v) {
+            Write-Host "::notice title=WebView2::runtime $v"
+          } else {
+            Write-Host "::warning title=WebView2::runtime missing, installing it"
+            $setup = Join-Path $env:TEMP 'MicrosoftEdgeWebview2Setup.exe'
+            Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $setup
+            Start-Process $setup -ArgumentList '/silent', '/install' -Wait
+            $v = (Get-ItemProperty $key -ErrorAction SilentlyContinue).pv
+            Write-Host "::notice title=WebView2::runtime now $v"
+          }
+
       # A step that never ends would hold the job for six hours: it has its own limit, and what failed is repeated as an
       # annotation (the log itself asks for a sign-in).
       - name: npm test

@@ -82,12 +82,21 @@ async function launch({ settings = {}, args = [] } = {}) {
   } catch (e) {
     const seen = (await targets()).map((t) => t.url);
     const state = app.exitCode === null ? 'still running' : `exited with ${app.exitCode}`;
+    // The windows the app really has (an error box would explain why no page came up) and the web view's processes.
+    let windows = '';
+    try {
+      windows = execFileSync(
+        'powershell',
+        ['-NoProfile', '-Command', "Get-Process tachy-download,msedgewebview2 -ErrorAction SilentlyContinue | ForEach-Object { $_.ProcessName + ':' + $_.MainWindowTitle } | Out-String"],
+        { encoding: 'utf8', timeout: 20000 },
+      ).replace(/\s+/g, ' ');
+    } catch {}
     killApp();
     let out = '';
     try {
       out = fs.readFileSync(logPath, 'utf8').slice(-1500);
     } catch {}
-    throw new Error(`the app did not come up (${state}; pages seen: ${JSON.stringify(seen)}; its output: ${JSON.stringify(out)}): ${e.message}`);
+    throw new Error(`the app did not come up (${state}; pages seen: ${JSON.stringify(seen)}; its output: ${JSON.stringify(out)}; processes and window titles: ${windows}): ${e.message}`);
   }
   const { ev } = main;
   const open = [main];
