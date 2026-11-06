@@ -81,6 +81,22 @@ async function launch({ settings = {}, args = [] } = {}) {
     await waitFor(async () => (await main.ev('typeof appState !== "undefined" && appState !== null')) === true, 30000);
   } catch (e) {
     const seen = (await targets()).map((t) => t.url);
+    // What the debugging port really answers (nothing, an error, or targets that are not pages), and who listens.
+    let raw = '';
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}/json`, { signal: AbortSignal.timeout(3000) });
+      raw = `${r.status} ${(await r.text()).replace(/\s+/g, ' ').slice(0, 600)}`;
+    } catch (err) {
+      raw = `no answer (${err.cause?.code ?? err.message})`;
+    }
+    let listening = '';
+    try {
+      listening = execFileSync(
+        'powershell',
+        ['-NoProfile', '-Command', "Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalAddress -in '127.0.0.1','::1' } | ForEach-Object { $_.LocalPort.ToString() + '/pid' + $_.OwningProcess } | Out-String"],
+        { encoding: 'utf8', timeout: 20000 },
+      ).replace(/\s+/g, ' ');
+    } catch {}
     const state = app.exitCode === null ? 'still running' : `exited with ${app.exitCode}`;
     // The windows the app really has (an error box would explain why no page came up) and the web view's processes.
     let windows = '';
@@ -96,7 +112,7 @@ async function launch({ settings = {}, args = [] } = {}) {
     try {
       out = fs.readFileSync(logPath, 'utf8').slice(-1500);
     } catch {}
-    throw new Error(`the app did not come up (${state}; pages seen: ${JSON.stringify(seen)}; its output: ${JSON.stringify(out)}; processes and window titles: ${windows}): ${e.message}`);
+    throw new Error(`the app did not come up (${state}; pages seen: ${JSON.stringify(seen)}; its output: ${JSON.stringify(out)}; processes and window titles: ${windows}; debugging port ${port} answers: ${raw}; loopback listeners: ${listening}): ${e.message}`);
   }
   const { ev } = main;
   const open = [main];
