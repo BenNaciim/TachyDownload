@@ -295,7 +295,11 @@ fn start(app: &AppHandle, dir: PathBuf, hidden: bool) -> Result<(), Box<dyn std:
         .build()?;
     if glass {
         // The same acrylic backdrop as Electron's `backgroundMaterial: 'acrylic'`.
-        shell::apply_glass(&window)?;
+        // A backdrop that cannot be applied (a session without desktop composition, such as a server or a CI
+        // machine) leaves an opaque window: that must never stop the app from starting.
+        if let Err(e) = shell::apply_glass(&window) {
+            eprintln!("the glass backdrop could not be applied: {e}");
+        }
     }
     menu::rebuild(app);
     tray::create(app)?;

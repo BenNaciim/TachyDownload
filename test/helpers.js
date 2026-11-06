@@ -45,7 +45,10 @@ function startServer(body, { ranges = true, bytesPerSec = 0, disposition = null 
     res.on('close', () => clearInterval(timer));
   });
   return new Promise((resolve) =>
-    server.listen(0, '127.0.0.1', () =>
+    server.listen(0, '127.0.0.1', () => {
+      // A test that fails before it can close the server must not keep Node alive forever (it once held a CI job
+      // for six hours).
+      server.unref();
       resolve({
         url: `http://127.0.0.1:${server.address().port}/files/sample.bin`,
         requests,
@@ -53,8 +56,8 @@ function startServer(body, { ranges = true, bytesPerSec = 0, disposition = null 
           server.closeAllConnections?.();
           return new Promise((r) => server.close(r));
         },
-      }),
-    ),
+      });
+    }),
   );
 }
 

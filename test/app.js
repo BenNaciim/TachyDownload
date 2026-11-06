@@ -14,7 +14,7 @@ const ROOT = path.join(__dirname, '..');
 const BIN = process.env.TACHY_BIN || path.join(ROOT, 'target', 'debug', 'tachy-download.exe');
 const skip = !fs.existsSync(BIN) && 'the app is not built (cargo build -p tachy-download)';
 const WIN = path.join(__dirname, 'win.ps1');
-const win = (...args) => execFileSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', WIN, ...args], { encoding: 'utf8' }).trim();
+const win = (...args) => execFileSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', WIN, ...args], { encoding: 'utf8', timeout: 20000 }).trim();
 
 const freePort = () =>
   new Promise((resolve) => {
@@ -52,7 +52,10 @@ async function launch({ settings = {}, args = [] } = {}) {
   const dir = tmpDir();
   fs.writeFileSync(path.join(userData, 'downloads.json'), JSON.stringify({ settings: { dir, connections: 5, confirmDownloads: false, ...settings }, tasks: [] }));
   const port = await freePort();
-  const app = spawn(BIN, ['--data-dir', userData, ...args], { stdio: 'ignore', env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}` } });
+  // What the app prints goes to a file next to its data, and is part of the error when it does not come up.
+  const logPath = path.join(userData, 'app-output.txt');
+  const logFd = fs.openSync(logPath, 'a');
+  const app = spawn(BIN, ['--data-dir', userData, ...args], { stdio: ['ignore', logFd, logFd], env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}` } });
   const exited = new Promise((resolve) => app.once('exit', resolve));
   const targets = async () => {
     try {
@@ -61,19 +64,36 @@ async function launch({ settings = {}, args = [] } = {}) {
       return [];
     }
   };
-  let page = null;
-  await waitFor(async () => (page = (await targets()).find((t) => /index\.html/.test(t.url))), 30000);
-  const main = await connect(page);
-  const { ev } = main;
-  await waitFor(async () => (await ev('typeof appState !== "undefined" && appState !== null')) === true, 30000);
-  const open = [main];
-  const close = () => {
-    for (const c of open) c.close();
+  // The app is always stopped with its children; a launch that fails must not leave it running, or its handle keeps
+  // Node from ever exiting.
+  const killApp = () => {
     try {
-      execFileSync('taskkill', ['/pid', String(app.pid), '/T', '/F'], { stdio: 'ignore' });
+      execFileSync('taskkill', ['/pid', String(app.pid), '/T', '/F'], { stdio: 'ignore', timeout: 20000 });
     } catch {
       app.kill();
     }
+  };
+  let page = null;
+  let main;
+  try {
+    await waitFor(async () => (page = (await targets()).find((t) => /index\.html/.test(t.url))), 30000);
+    main = await connect(page);
+    await waitFor(async () => (await main.ev('typeof appState !== "undefined" && appState !== null')) === true, 30000);
+  } catch (e) {
+    const seen = (await targets()).map((t) => t.url);
+    const state = app.exitCode === null ? 'still running' : `exited with ${app.exitCode}`;
+    killApp();
+    let out = '';
+    try {
+      out = fs.readFileSync(logPath, 'utf8').slice(-1500);
+    } catch {}
+    throw new Error(`the app did not come up (${state}; pages seen: ${JSON.stringify(seen)}; its output: ${JSON.stringify(out)}): ${e.message}`);
+  }
+  const { ev } = main;
+  const open = [main];
+  const close = () => {
+    for (const c of open) c.close();
+    killApp();
   };
   // A page other than the main one (a confirmation window), by part of its address.
   const pageOf = async (re) => {

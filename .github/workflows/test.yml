@@ -17,6 +17,7 @@ env:
 jobs:
   test:
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -32,7 +33,6 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # `spikes/` are throwaway probes kept only until the rewrite is merged: they are not part of the product.
       - run: cargo fmt -p tachy-core -p tachy-download -- --check
 
       - run: cargo clippy -p tachy-core -p tachy-download --all-targets -- -D warnings
@@ -44,4 +44,14 @@ jobs:
 
       - run: npm run lint
 
-      - run: npm test
+      # A step that never ends would hold the job for six hours: it has its own limit, and what failed is repeated as an
+      # annotation (the log itself asks for a sign-in).
+      - name: npm test
+        shell: bash
+        timeout-minutes: 15
+        run: npm test 2>&1 | tee test-output.txt
+
+      - name: What failed
+        if: failure()
+        shell: bash
+        run: node tools/ci-annotate.js test-output.txt
