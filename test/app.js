@@ -55,7 +55,7 @@ async function launch({ settings = {}, args = [] } = {}) {
   // What the app prints goes to a file next to its data, and is part of the error when it does not come up.
   const logPath = path.join(userData, 'app-output.txt');
   const logFd = fs.openSync(logPath, 'a');
-  const app = spawn(BIN, ['--data-dir', userData, ...args], { stdio: ['ignore', logFd, logFd], env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}` } });
+  const app = spawn(BIN, ['--data-dir', userData, ...args], { stdio: ['ignore', logFd, logFd], env: { ...process.env, TACHY_DEBUG_PORT: String(port) } });
   const exited = new Promise((resolve) => app.once('exit', resolve));
   const targets = async () => {
     try {

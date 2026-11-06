@@ -65,7 +65,7 @@ pub fn ask(app: &AppHandle, url: &str, opts: AddOpts, size: u64) {
             .always_on_top(true)
             .visible(false)
             .center()
-            .additional_browser_args(crate::BROWSER_ARGS)
+            .additional_browser_args(&crate::browser_args())
             .on_navigation(crate::is_app_url)
             .on_page_load(move |w, payload| {
                 if payload.event() == PageLoadEvent::Finished {

@@ -57,7 +57,7 @@ async function once(idleSeconds) {
   const port = await freePort();
   const args = kind === 'electron' ? [`--user-data-dir=${dataDir}`, `--remote-debugging-port=${port}`] : [`--data-dir=${dataDir}`];
   const env = { ...process.env, APPDATA: dataDir, TACHY_FAKE_IDLE: '1' }; // the last one only matters to the M0 fake core
-  if (kind === 'tauri') env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = `--remote-debugging-port=${port}`;
+  if (kind === 'tauri') env.TACHY_DEBUG_PORT = String(port);
   const t0 = process.hrtime.bigint();
   const child = spawn(exe, args, { stdio: 'ignore', env });
   try {

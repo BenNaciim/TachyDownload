@@ -33,6 +33,25 @@ use shell::{Shell, glass_supported, show_window};
 /// instead made the web view burn about 9 % of a core at rest (measured, design §10.4).
 pub const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection";
 
+/// The arguments of the web view: `BROWSER_ARGS`, plus `--remote-debugging-port` when `TACHY_DEBUG_PORT` names a port.
+/// The browser-driven tests use it to reach the pages. The web view's own `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` is
+/// not used for that: on a CI machine it was not applied (the port never opened), while the arguments the app passes
+/// itself always are.
+pub fn browser_args() -> String {
+    browser_args_for(std::env::var("TACHY_DEBUG_PORT").ok().as_deref())
+}
+
+/// `browser_args` for a given value of `TACHY_DEBUG_PORT`: anything that is not a port from 1 to 65535 is ignored, so
+/// nothing else can be slipped into the command line through it.
+pub fn browser_args_for(port: Option<&str>) -> String {
+    match port.and_then(|p| p.parse::<u16>().ok()).filter(|p| *p != 0) {
+        Some(p) if port.is_some_and(|raw| raw.bytes().all(|b| b.is_ascii_digit())) => {
+            format!("{BROWSER_ARGS} --remote-debugging-port={p}")
+        }
+        _ => BROWSER_ARGS.to_string(),
+    }
+}
+
 /// The pages of the app, and nothing else: a link that leaves them is never followed.
 pub fn is_app_url(url: &tauri::Url) -> bool {
     matches!(url.scheme(), "tauri" | "about") || matches!(url.host_str(), Some("tauri.localhost"))
@@ -290,7 +309,7 @@ fn start(app: &AppHandle, dir: PathBuf, hidden: bool) -> Result<(), Box<dyn std:
         .expect("the main window is described in tauri.conf.json");
     let window = WebviewWindowBuilder::from_config(app, &config)?
         .visible(!hidden)
-        .additional_browser_args(BROWSER_ARGS)
+        .additional_browser_args(&browser_args())
         .on_navigation(is_app_url)
         .build()?;
     if glass {
@@ -344,4 +363,22 @@ fn spawn_timers(app: &AppHandle) {
             tokio::time::sleep(Duration::from_secs(12 * 3600)).await;
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_debugging_port_is_added_to_the_web_view_arguments_only_when_it_is_a_port() {
+        assert_eq!(browser_args_for(None), BROWSER_ARGS);
+        assert_eq!(
+            browser_args_for(Some("9222")),
+            format!("{BROWSER_ARGS} --remote-debugging-port=9222")
+        );
+        // Anything else (an argument smuggled in, an empty value, a number out of range) is ignored.
+        for odd in ["", "0", "99999", "9222 --no-sandbox", "abc", "-1"] {
+            assert_eq!(browser_args_for(Some(odd)), BROWSER_ARGS, "{odd:?}");
+        }
+    }
 }
